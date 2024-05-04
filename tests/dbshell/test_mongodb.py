@@ -61,9 +61,9 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
                             "HOST": "somehost",
                             "PORT": 444,
                             "OPTIONS": {
-                                "authentication_database": authentication_database,
-                                "authentication_mechanism": authentication_mechanism,
-                                "retry_writes": retry_writes,
+                                "authenticationDatabase": authentication_database,
+                                "authenticationMechanism": authentication_mechanism,
+                                "retryWrites": retry_writes,
                             },
                         }
                     ),
