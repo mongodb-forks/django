@@ -96,7 +96,7 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
             "--username",
             "someuser",
             "--password",
-            "someuser",
+            "somepassword",
             "mongodb://host:3333/somedbname",
             "path_to_file1",
             "path_to_file2",
