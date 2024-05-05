@@ -98,6 +98,7 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
             "--password",
             "somepassword",
             "mongodb://host:3333/somedbname",
+            "--shell",
             "path_to_file1",
             "path_to_file2",
         ]
@@ -110,8 +111,8 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
                     "PASSWORD": "somepassword",
                     "HOST": "host",
                     "PORT": "3333",
-                    "OPTIONS": {"filenames": ["path_to_file1", "path_to_file2"]},
-                }
+                },
+                ["path_to_file1", "path_to_file2"],
             ),
             (expected_args, expected_env),
         )
@@ -131,7 +132,7 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
                         },
                         ["--help"],
                     ),
-                    (["mongosh", "--help"], None),
+                    (["mongosh", "somedbname", "--help"], None),
                 )
 
     def test_crash_password_does_not_leak(self):
