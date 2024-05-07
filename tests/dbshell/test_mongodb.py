@@ -30,26 +30,30 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
                 if authentication_database is not None:
                     expected_args = [
                         "mongosh",
+                        "--host",
+                        "somehost",
+                        "--port",
+                        444,
                         "--username",
                         "someuser",
                         "--password",
                         "somepassword",
-                        "--authenticationDatabase",
-                        "value1",
-                        "--authenticationMechanism",
-                        "value2",
                         "--retryWrites",
                         "true",
-                        "mongodb://somehost:444/somedbname",
+                        "somedbname",
                     ]
                 else:
                     expected_args = [
                         "mongosh",
+                        "--host",
+                        "somehost",
+                        "--port",
+                        444,
                         "--username",
                         "someuser",
                         "--password",
                         "somepassword",
-                        "mongodb://somehost:444/somedbname",
+                        "somedbname",
                     ]
 
                 self.assertEqual(
@@ -74,8 +78,20 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
         settings_port = 444
         options_port = 555
         self.assertNotEqual(settings_port, options_port, "test pre-req")
-        expected_args = ["mongosh", "mongodb://user:pass@host:port/db"]
+        expected_args = [
+            "mongosh",
+            "--host",
+            "settinghost",
+            "--port",
+            444,
+            "--username",
+            "settinguser",
+            "--password",
+            "settingpassword",
+            "settingdbname",
+        ]
         expected_env = None
+
         self.assertEqual(
             self.settings_to_cmd_args_env(
                 {
@@ -84,7 +100,7 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
                     "PASSWORD": "settingpassword",
                     "HOST": "settinghost",
                     "PORT": settings_port,
-                    "OPTIONS": {"uri": "mongodb://user:pass@host:port/db"},
+                    "OPTIONS": {"port": options_port},
                 }
             ),
             (expected_args, expected_env),
@@ -93,11 +109,15 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
     def test_connect_with_fileconfigs(self):
         expected_args = [
             "mongosh",
+            "--host",
+            "host",
+            "--port",
+            "3333",
             "--username",
             "someuser",
             "--password",
             "somepassword",
-            "mongodb://host:3333/somedbname",
+            "somedbname",
             "--shell",
             "path_to_file1",
             "path_to_file2",
@@ -116,24 +136,6 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
             ),
             (expected_args, expected_env),
         )
-
-    def test_empty_host_parameter(self):
-        for port in [(None,), ("4444",)]:
-            with self.subTest(keys=port):
-                self.assertEqual(
-                    self.settings_to_cmd_args_env(
-                        {
-                            "NAME": "somedbname",
-                            "USER": None,
-                            "PASSWORD": None,
-                            "HOST": None,
-                            "PORT": port,
-                            "OPTIONS": {},
-                        },
-                        ["--help"],
-                    ),
-                    (["mongosh", "somedbname", "--help"], None),
-                )
 
     def test_crash_password_does_not_leak(self):
         # The password doesn't leak in an exception that results from a client
