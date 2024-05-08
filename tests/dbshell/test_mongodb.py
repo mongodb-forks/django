@@ -1,8 +1,4 @@
-import os
 import signal
-import subprocess
-import sys
-from pathlib import Path
 from unittest import mock
 
 from django_mongodb.client import DatabaseClient
@@ -11,7 +7,7 @@ from django.db import connection
 from django.test import SimpleTestCase
 
 
-class MongoDBDbshellCommandTestCase(SimpleTestCase):
+class MongoDBDbshellCommandTests(SimpleTestCase):
     def settings_to_cmd_args_env(self, settings_dict, parameters=None):
         if parameters is None:
             parameters = []
@@ -105,30 +101,6 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
             ),
             (expected_args, expected_env),
         )
-
-    def test_crash_password_does_not_leak(self):
-        # The password doesn't leak in an exception that results from a client
-        # crash.
-        self.skipTest("We are unable to pass the password via environment vairable")
-        args, env = DatabaseClient.settings_to_cmd_args_env(
-            {
-                "NAME": "somedbname",
-                "USER": "someuser",
-                "PASSWORD": "somepassword",
-                "HOST": "somehost",
-                "PORT": 444,
-                "OPTIONS": {},
-            },
-            [],
-        )
-        if env:
-            env = {**os.environ, **env}
-        fake_client = Path(__file__).with_name("fake_client.py")
-        args[0:1] = [sys.executable, str(fake_client)]
-        with self.assertRaises(subprocess.CalledProcessError) as ctx:
-            subprocess.run(args, check=True, env=env)
-
-        self.assertNotIn("somepassword", str(ctx.exception))
 
     def test_sigint_handler(self):
         """SIGINT is ignored in Python and passed to Mongodb to abort queries."""
