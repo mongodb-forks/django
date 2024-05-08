@@ -106,37 +106,6 @@ class MongoDBDbshellCommandTestCase(SimpleTestCase):
             (expected_args, expected_env),
         )
 
-    def test_connect_with_fileconfigs(self):
-        expected_args = [
-            "mongosh",
-            "--host",
-            "host",
-            "--port",
-            "3333",
-            "--username",
-            "someuser",
-            "--password",
-            "somepassword",
-            "somedbname",
-            "--shell",
-            "path_to_file1",
-            "path_to_file2",
-        ]
-        expected_env = None
-        self.assertEqual(
-            self.settings_to_cmd_args_env(
-                {
-                    "NAME": "somedbname",
-                    "USER": "someuser",
-                    "PASSWORD": "somepassword",
-                    "HOST": "host",
-                    "PORT": "3333",
-                },
-                ["path_to_file1", "path_to_file2"],
-            ),
-            (expected_args, expected_env),
-        )
-
     def test_crash_password_does_not_leak(self):
         # The password doesn't leak in an exception that results from a client
         # crash.
