@@ -2,7 +2,7 @@ import datetime
 import zoneinfo
 
 from django.conf import settings
-from django.db import DataError, OperationalError
+from django.db import DataError, NotSupportedError, OperationalError, connection
 from django.db.models import (
     DateField,
     DateTimeField,
@@ -48,6 +48,14 @@ from django.utils import timezone
 from django.utils.deprecation import RemovedInDjango2029Warning
 
 from ..models import Author, DTModel, Fan
+
+
+def microsecond_support(value):
+    return (
+        value
+        if connection.features.supports_microsecond_precision
+        else value.replace(microsecond=0)
+    )
 
 
 def truncate_to(value, kind, tzinfo=None):
@@ -222,7 +230,7 @@ class DateFunctionTests(TestCase):
         self.create_model(start_datetime, end_datetime)
         self.create_model(end_datetime, start_datetime)
 
-        with self.assertRaises((OperationalError, ValueError)):
+        with self.assertRaises((NotSupportedError, OperationalError, ValueError)):
             DTModel.objects.filter(
                 start_datetime__year=Extract(
                     "start_datetime", "day' FROM start_datetime)) OR 1=1;--"
@@ -230,8 +238,12 @@ class DateFunctionTests(TestCase):
             ).exists()
 
     def test_extract_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -435,8 +447,12 @@ class DateFunctionTests(TestCase):
                     DTModel.objects.annotate(extracted=Extract("duration", lookup))
 
     def test_extract_year_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -464,8 +480,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_iso_year_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -528,6 +548,7 @@ class DateFunctionTests(TestCase):
         qs = DTModel.objects.filter(
             start_datetime__iso_year=2015,
         ).order_by("start_datetime")
+
         self.assertSequenceEqual(qs, [obj_1_iso_2015, obj_2_iso_2015])
         qs = DTModel.objects.filter(
             start_datetime__iso_year__gt=2014,
@@ -539,8 +560,12 @@ class DateFunctionTests(TestCase):
         self.assertSequenceEqual(qs, [obj_1_iso_2014])
 
     def test_extract_month_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -574,8 +599,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_day_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -603,8 +632,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_week_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -633,8 +666,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_quarter_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 8, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 8, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -725,8 +762,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_weekday_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -760,8 +801,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_iso_weekday_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -795,8 +840,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_hour_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -824,8 +873,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_minute_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -859,8 +912,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_extract_second_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -925,14 +982,18 @@ class DateFunctionTests(TestCase):
                     "year', start_datetime)) OR 1=1;--",
                 )
             ).exists()
-        except (DataError, OperationalError):
+        except (DataError, NotSupportedError, OperationalError):
             pass
         else:
             self.assertIs(exists, False)
 
     def test_trunc_func(self):
-        start_datetime = datetime.datetime(999, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(999, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -1016,6 +1077,8 @@ class DateFunctionTests(TestCase):
         self.assertEqual(qs.count(), 2)
 
     def _test_trunc_week(self, start_datetime, end_datetime):
+        start_datetime = microsecond_support(start_datetime)
+        end_datetime = microsecond_support(end_datetime)
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -1108,7 +1171,9 @@ class DateFunctionTests(TestCase):
                 )
 
     def test_trunc_year_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
         end_datetime = truncate_to(
             datetime.datetime(2016, 6, 15, 14, 10, 50, 123), "year"
         )
@@ -1157,7 +1222,9 @@ class DateFunctionTests(TestCase):
             )
 
     def test_trunc_quarter_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
         end_datetime = truncate_to(
             datetime.datetime(2016, 10, 15, 14, 10, 50, 123), "quarter"
         )
@@ -1216,7 +1283,9 @@ class DateFunctionTests(TestCase):
             )
 
     def test_trunc_month_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
         end_datetime = truncate_to(
             datetime.datetime(2016, 6, 15, 14, 10, 50, 123), "month"
         )
@@ -1265,7 +1334,9 @@ class DateFunctionTests(TestCase):
             )
 
     def test_trunc_week_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
         end_datetime = truncate_to(
             datetime.datetime(2016, 6, 15, 14, 10, 50, 123), "week"
         )
@@ -1304,8 +1375,12 @@ class DateFunctionTests(TestCase):
             )
 
     def test_trunc_date_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -1351,8 +1426,12 @@ class DateFunctionTests(TestCase):
         )
 
     def test_trunc_time_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         if settings.USE_TZ:
             start_datetime = timezone.make_aware(start_datetime)
             end_datetime = timezone.make_aware(end_datetime)
@@ -1425,7 +1504,9 @@ class DateFunctionTests(TestCase):
         )
 
     def test_trunc_day_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
         end_datetime = truncate_to(
             datetime.datetime(2016, 6, 15, 14, 10, 50, 123), "day"
         )
@@ -1463,7 +1544,9 @@ class DateFunctionTests(TestCase):
             )
 
     def test_trunc_hour_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
         end_datetime = truncate_to(
             datetime.datetime(2016, 6, 15, 14, 10, 50, 123), "hour"
         )
@@ -1512,7 +1595,9 @@ class DateFunctionTests(TestCase):
             )
 
     def test_trunc_minute_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
         end_datetime = truncate_to(
             datetime.datetime(2016, 6, 15, 14, 10, 50, 123), "minute"
         )
@@ -1563,7 +1648,9 @@ class DateFunctionTests(TestCase):
             )
 
     def test_trunc_second_func(self):
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
         end_datetime = truncate_to(
             datetime.datetime(2016, 6, 15, 14, 10, 50, 123), "second"
         )
@@ -1596,7 +1683,7 @@ class DateFunctionTests(TestCase):
             DTModel.objects.filter(
                 start_datetime=TruncSecond("start_datetime")
             ).count(),
-            1,
+            1 if connection.features.supports_microsecond_precision else 2,
         )
 
         with self.assertRaisesMessage(
@@ -1799,8 +1886,12 @@ class DateFunctionWithTimeZoneTests(DateFunctionTests):
             ).get()
 
     def test_trunc_timezone_applied_before_truncation(self):
-        start_datetime = datetime.datetime(2016, 1, 1, 1, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2016, 1, 1, 1, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         start_datetime = timezone.make_aware(start_datetime)
         end_datetime = timezone.make_aware(end_datetime)
         self.create_model(start_datetime, end_datetime)
@@ -1840,8 +1931,12 @@ class DateFunctionWithTimeZoneTests(DateFunctionTests):
         If the truncated datetime transitions to a different offset (daylight
         saving) then the returned value will have that new timezone/offset.
         """
-        start_datetime = datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
-        end_datetime = datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        start_datetime = microsecond_support(
+            datetime.datetime(2015, 6, 15, 14, 30, 50, 321)
+        )
+        end_datetime = microsecond_support(
+            datetime.datetime(2016, 6, 15, 14, 10, 50, 123)
+        )
         start_datetime = timezone.make_aware(start_datetime)
         end_datetime = timezone.make_aware(end_datetime)
         self.create_model(start_datetime, end_datetime)
