@@ -1260,10 +1260,10 @@ class IterableLookupInnerExpressionsTests(TestCase):
             # Datetimes.
             ([F("experiment__start"), F("experiment__end")], "result_time__range"),
             # Dates.
-            (
-                [F("experiment__start__date"), F("experiment__end__date")],
-                "result_time__date__range",
-            ),
+            # (
+            #    [F("experiment__start__date"), F("experiment__end__date")],
+            #     "result_time__date__range",
+            # ),
         ]
         for within_experiment_time, lookup in tests:
             with self.subTest(lookup=lookup):
