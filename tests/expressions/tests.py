@@ -1444,10 +1444,9 @@ class SimpleExpressionTests(SimpleTestCase):
 class ExpressionsNumericTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        Number(integer=-1).save()
-        Number(integer=42).save()
-        Number(integer=1337).save()
-        Number.objects.update(float=F("integer"))
+        Number(integer=-1, float=-1).save()
+        Number(integer=42, float=42).save()
+        Number(integer=1337, float=1337).save()
 
     def test_fill_with_value_from_same_object(self):
         """
@@ -1480,9 +1479,8 @@ class ExpressionsNumericTests(TestCase):
         We can filter for objects, where a value is not equals the value
         of an other field.
         """
-        self.assertEqual(
-            Number.objects.filter(integer__gt=0).update(integer=F("integer") + 1), 2
-        )
+        Number.objects.filter(integer=42).update(integer=43)
+        Number.objects.filter(integer=1337).update(integer=1338)
         self.assertQuerySetEqual(
             Number.objects.exclude(float=F("integer")),
             [(43, 42), (1338, 1337)],
@@ -1502,15 +1500,12 @@ class ExpressionsNumericTests(TestCase):
         Complex expressions of different connection types are possible.
         """
         n = Number.objects.create(integer=10, float=123.45)
-        self.assertEqual(
-            Number.objects.filter(pk=n.pk).update(float=F("integer") + F("float") * 2),
-            1,
+        qs = Number.objects.filter(pk=n.pk).annotate(
+            float1=F("integer") + F("float") * 2
         )
 
-        self.assertEqual(Number.objects.get(pk=n.pk).integer, 10)
-        self.assertEqual(
-            Number.objects.get(pk=n.pk).float, Approximate(256.900, places=3)
-        )
+        self.assertEqual(qs.get(pk=n.pk).integer, 10)
+        self.assertEqual(qs.get(pk=n.pk).float1, Approximate(256.900, places=3))
 
     def test_decimal_expression(self):
         n = Number.objects.create(integer=1, decimal_value=Decimal("0.5"))
@@ -1528,52 +1523,44 @@ class ExpressionOperatorTests(TestCase):
 
     def test_lefthand_addition(self):
         # LH Addition of floats and integers
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=F("integer") + 15, float=F("float") + 42.7
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=F("integer") + 15, float1=F("float") + 42.7
         )
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 57)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(58.200, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 57)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(58.200, places=3))
 
     def test_lefthand_subtraction(self):
         # LH Subtraction of floats and integers
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=F("integer") - 15, float=F("float") - 42.7
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=F("integer") - 15, float1=F("float") - 42.7
         )
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 27)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(-27.200, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 27)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(-27.200, places=3))
 
     def test_lefthand_multiplication(self):
         # Multiplication of floats and integers
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=F("integer") * 15, float=F("float") * 42.7
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=F("integer") * 15, float1=F("float") * 42.7
         )
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 630)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(661.850, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 630)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(661.850, places=3))
 
     def test_lefthand_division(self):
         # LH Division of floats and integers
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=F("integer") / 2, float=F("float") / 42.7
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=F("integer") / 2, float1=F("float") / 42.7
         )
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 21)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(0.363, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 21)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(0.363, places=3))
 
     def test_lefthand_modulo(self):
         # LH Modulo arithmetic on integers
-        Number.objects.filter(pk=self.n.pk).update(integer=F("integer") % 20)
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 2)
+        qs = Number.objects.filter(pk=self.n.pk).annotate(integer1=F("integer") % 20)
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 2)
 
     def test_lefthand_modulo_null(self):
         # LH Modulo arithmetic on integers.
@@ -1583,28 +1570,32 @@ class ExpressionOperatorTests(TestCase):
 
     def test_lefthand_bitwise_and(self):
         # LH Bitwise ands on integers
-        Number.objects.filter(pk=self.n.pk).update(integer=F("integer").bitand(56))
-        Number.objects.filter(pk=self.n1.pk).update(integer=F("integer").bitand(-56))
+        qs1 = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=F("integer").bitand(56)
+        )
+        qs2 = Number.objects.filter(pk=self.n1.pk).annotate(
+            integer1=F("integer").bitand(-56)
+        )
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 40)
-        self.assertEqual(Number.objects.get(pk=self.n1.pk).integer, -64)
+        self.assertEqual(qs1.get(pk=self.n.pk).integer1, 40)
+        self.assertEqual(qs2.get(pk=self.n1.pk).integer1, -64)
 
     def test_lefthand_bitwise_left_shift_operator(self):
-        Number.objects.update(integer=F("integer").bitleftshift(2))
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 168)
-        self.assertEqual(Number.objects.get(pk=self.n1.pk).integer, -168)
+        qs = Number.objects.annotate(integer1=F("integer").bitleftshift(2))
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 168)
+        self.assertEqual(qs.get(pk=self.n1.pk).integer1, -168)
 
     def test_lefthand_bitwise_right_shift_operator(self):
-        Number.objects.update(integer=F("integer").bitrightshift(2))
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 10)
-        self.assertEqual(Number.objects.get(pk=self.n1.pk).integer, -11)
+        qs = Number.objects.annotate(integer1=F("integer").bitrightshift(2))
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 10)
+        self.assertEqual(qs.get(pk=self.n1.pk).integer1, -11)
 
     def test_lefthand_bitwise_or(self):
         # LH Bitwise or on integers
-        Number.objects.update(integer=F("integer").bitor(48))
+        qs = Number.objects.annotate(integer1=F("integer").bitor(48))
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 58)
-        self.assertEqual(Number.objects.get(pk=self.n1.pk).integer, -10)
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 58)
+        self.assertEqual(qs.get(pk=self.n1.pk).integer1, -10)
 
     def test_lefthand_transformed_field_bitwise_or(self):
         Employee.objects.create(firstname="Max", lastname="Mustermann")
@@ -1614,30 +1605,30 @@ class ExpressionOperatorTests(TestCase):
 
     def test_lefthand_power(self):
         # LH Power arithmetic operation on floats and integers
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=F("integer") ** 2, float=F("float") ** 1.5
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=F("integer") ** 2, float1=F("float") ** 1.5
         )
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 1764)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(61.02, places=2)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 1764)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(61.02, places=2))
 
     def test_lefthand_bitwise_xor(self):
-        Number.objects.update(integer=F("integer").bitxor(48))
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 26)
-        self.assertEqual(Number.objects.get(pk=self.n1.pk).integer, -26)
+        qs = Number.objects.annotate(integer1=F("integer").bitxor(48))
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 26)
+        self.assertEqual(qs.get(pk=self.n1.pk).integer1, -26)
 
     def test_lefthand_bitwise_xor_null(self):
         employee = Employee.objects.create(firstname="John", lastname="Doe")
-        Employee.objects.update(salary=F("salary").bitxor(48))
-        employee.refresh_from_db()
-        self.assertIsNone(employee.salary)
+        qs = Employee.objects.annotate(salary1=F("salary").bitxor(48))
+        self.assertIsNone(qs.get(id=employee.id).salary1)
 
     def test_lefthand_bitwise_xor_right_null(self):
         employee = Employee.objects.create(firstname="John", lastname="Doe", salary=48)
-        Employee.objects.update(salary=F("salary").bitxor(None))
-        employee.refresh_from_db()
-        self.assertIsNone(employee.salary)
+        qs = Employee.objects.annotate(
+            salary1=ExpressionWrapper(
+                F("salary").bitxor(None), output_field=IntegerField()
+            )
+        )
+        self.assertIsNone(qs.get(id=employee.id).salary1)
 
     @unittest.skipUnless(
         connection.vendor == "oracle", "Oracle doesn't support bitwise XOR."
@@ -1649,64 +1640,54 @@ class ExpressionOperatorTests(TestCase):
 
     def test_right_hand_addition(self):
         # Right hand operators
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=15 + F("integer"), float=42.7 + F("float")
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=15 + F("integer"), float1=42.7 + F("float")
         )
 
         # RH Addition of floats and integers
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 57)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(58.200, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 57)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(58.200, places=3))
 
     def test_right_hand_subtraction(self):
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=15 - F("integer"), float=42.7 - F("float")
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=15 - F("integer"), float1=42.7 - F("float")
         )
 
         # RH Subtraction of floats and integers
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, -27)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(27.200, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, -27)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(27.200, places=3))
 
     def test_right_hand_multiplication(self):
         # RH Multiplication of floats and integers
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=15 * F("integer"), float=42.7 * F("float")
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=15 * F("integer"), float1=42.7 * F("float")
         )
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 630)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(661.850, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 630)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(661.850, places=3))
 
     def test_right_hand_division(self):
         # RH Division of floats and integers
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=640 / F("integer"), float=42.7 / F("float")
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=640 / F("integer"), float1=42.7 / F("float")
         )
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 15)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(2.755, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 15)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(2.755, places=3))
 
     def test_right_hand_modulo(self):
         # RH Modulo arithmetic on integers
-        Number.objects.filter(pk=self.n.pk).update(integer=69 % F("integer"))
+        qs = Number.objects.filter(pk=self.n.pk).annotate(integer1=69 % F("integer"))
 
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 27)
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 27)
 
     def test_righthand_power(self):
         # RH Power arithmetic operation on floats and integers
-        Number.objects.filter(pk=self.n.pk).update(
-            integer=2 ** F("integer"), float=1.5 ** F("float")
+        qs = Number.objects.filter(pk=self.n.pk).annotate(
+            integer1=2 ** F("integer"), float1=1.5 ** F("float")
         )
-        self.assertEqual(Number.objects.get(pk=self.n.pk).integer, 4398046511104)
-        self.assertEqual(
-            Number.objects.get(pk=self.n.pk).float, Approximate(536.308, places=3)
-        )
+        self.assertEqual(qs.get(pk=self.n.pk).integer1, 4398046511104)
+        self.assertEqual(qs.get(pk=self.n.pk).float1, Approximate(536.308, places=3))
 
 
 class FTimeDeltaTests(TestCase):
