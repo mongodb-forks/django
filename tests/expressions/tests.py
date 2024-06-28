@@ -2050,8 +2050,13 @@ class FTimeDeltaTests(TestCase):
 
     @skipUnlessDBFeature("supports_temporal_subtraction")
     def test_datetime_subtraction_microseconds(self):
-        delta = datetime.timedelta(microseconds=8999999999999999)
-        Experiment.objects.update(end=F("start") + delta)
+        microseconds = 8999999999999999
+        if not connection.features.supports_microsecond_precision:
+            microseconds -= 999
+        delta = datetime.timedelta(microseconds=microseconds)
+        for experiment in Experiment.objects.all():
+            experiment.end = experiment.start + delta
+            experiment.save()
         qs = Experiment.objects.annotate(delta=F("end") - F("start"))
         for e in qs:
             self.assertEqual(e.delta, delta)
@@ -2070,7 +2075,10 @@ class FTimeDeltaTests(TestCase):
         self.assertQuerySetEqual(over_estimate, ["e3", "e4", "e5"], lambda e: e.name)
 
     def test_duration_with_datetime_microseconds(self):
-        delta = datetime.timedelta(microseconds=8999999999999999)
+        microseconds = 8999999999999999
+        if not connection.features.supports_microsecond_precision:
+            microseconds -= 999
+        delta = datetime.timedelta(microseconds=microseconds)
         qs = Experiment.objects.annotate(
             dt=ExpressionWrapper(
                 F("start") + delta,
