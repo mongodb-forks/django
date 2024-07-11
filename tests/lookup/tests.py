@@ -1112,6 +1112,10 @@ class LookupTests(TestCase):
         self.assertEqual(Game.objects.filter(season__gt__in=[222, 333]).count(), 5)
         self.assertEqual(Game.objects.filter(season__gt__gt=111).count(), 5)
 
+    def test_lookup_collision_distinct(self):
+        # These were separated from the above test because distinct() isn't
+        # supported.
+
         # Players who played in 2009
         self.assertEqual(
             Player.objects.filter(games__season__year=2009).distinct().count(), 2
