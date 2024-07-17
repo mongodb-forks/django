@@ -29,7 +29,7 @@ class Child(models.Model):
     teacher = models.ForeignKey(Teacher, models.CASCADE)
 
     content_type = models.ForeignKey(ContentType, models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.TextField()
     parent = GenericForeignKey()
 
     def __str__(self):
