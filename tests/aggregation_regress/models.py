@@ -1,3 +1,5 @@
+from django_mongodb.fields import MongoAutoField
+
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
@@ -45,13 +47,13 @@ class Store(models.Model):
 
 
 class Entries(models.Model):
-    EntryID = models.AutoField(primary_key=True, db_column="Entry ID")
+    EntryID = MongoAutoField(primary_key=True, db_column="Entry ID")
     Entry = models.CharField(unique=True, max_length=50)
     Exclude = models.BooleanField(default=False)
 
 
 class Clues(models.Model):
-    ID = models.AutoField(primary_key=True)
+    ID = MongoAutoField(primary_key=True)
     EntryID = models.ForeignKey(
         Entries, models.CASCADE, verbose_name="Entry", db_column="Entry ID"
     )
