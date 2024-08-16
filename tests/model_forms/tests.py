@@ -1512,8 +1512,9 @@ class ModelFormBasicTests(TestCase):
 <li>The URL: <input type="text" name="url" maxlength="40" required></li>""",
         )
 
-    def test_initial_values(self):
-        self.create_basic_data()
+    def test_initial_values(self, create_data=True):
+        if create_data:
+            self.create_basic_data()
         # Initial values can be provided for model forms
         f = ArticleForm(
             auto_id=False,
@@ -1623,6 +1624,26 @@ class ModelFormBasicTests(TestCase):
         self.assertEqual(test_art.id, art_id_1)
         test_art = Article.objects.get(id=art_id_1)
         self.assertEqual(test_art.headline, "Test headline")
+
+    def test_int_pks(self):
+        """
+        MongoAutoField supports numeric pks in ModelForm data, not just
+        ObjectId.
+        """
+        # The following lines repeat self.create_initial_data() but with
+        # manually assigned pks.
+        self.c1 = Category.objects.create(
+            pk=1, name="Entertainment", slug="entertainment", url="entertainment"
+        )
+        self.c2 = Category.objects.create(
+            pk=2, name="It's a test", slug="its-test", url="test"
+        )
+        self.c3 = Category.objects.create(
+            pk=3, name="Third test", slug="third-test", url="third"
+        )
+        self.w_royko = Writer.objects.create(name="Mike Royko", pk=1)
+        self.w_woodward = Writer.objects.create(name="Bob Woodward", pk=2)
+        self.test_initial_values(create_data=False)
 
     def test_m2m_initial_callable(self):
         """
