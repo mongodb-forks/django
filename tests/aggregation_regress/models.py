@@ -19,7 +19,7 @@ class Publisher(models.Model):
 class ItemTag(models.Model):
     tag = models.CharField(max_length=100)
     content_type = models.ForeignKey(ContentType, models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = models.CharField(max_length=24)
     content_object = GenericForeignKey("content_type", "object_id")
 
 
@@ -65,7 +65,7 @@ class WithManualPK(models.Model):
     # classes with the same PK value, and there are some (external)
     # DB backends that don't work nicely when assigning integer to AutoField
     # column (MSSQL at least).
-    id = models.IntegerField(primary_key=True)
+    id = MongoAutoField(primary_key=True)
 
 
 class HardbackBook(Book):
