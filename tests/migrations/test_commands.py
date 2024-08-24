@@ -870,10 +870,7 @@ class MigrateTests(MigrationTestBase):
                 "--",
             ],
         )
-        self.assertIn(
-            "create table %s" % connection.ops.quote_name("migrations_author").lower(),
-            lines[3].lower(),
-        )
+        self.assertIn("db.create_collection('migrations_author')", lines[3].lower())
         pos = lines.index("--", 3)
         self.assertEqual(
             lines[pos : pos + 3],
@@ -884,8 +881,7 @@ class MigrateTests(MigrationTestBase):
             ],
         )
         self.assertIn(
-            "create table %s" % connection.ops.quote_name("migrations_tribble").lower(),
-            lines[pos + 3].lower(),
+            "db.create_collection('migrations_tribble')", lines[pos + 3].lower()
         )
         pos = lines.index("--", pos + 3)
         self.assertEqual(
@@ -918,6 +914,7 @@ class MigrateTests(MigrationTestBase):
         call_command("sqlmigrate", "migrations", "0001", stdout=out, backwards=True)
 
         lines = out.getvalue().splitlines()
+
         try:
             if connection.features.can_rollback_ddl:
                 self.assertEqual(lines[0], connection.ops.start_transaction_sql())
@@ -951,10 +948,7 @@ class MigrateTests(MigrationTestBase):
                 ],
             )
             next_pos = lines.index("--", pos + 3)
-            drop_table_sql = (
-                "drop table %s"
-                % connection.ops.quote_name("migrations_tribble").lower()
-            )
+            drop_table_sql = "db.migrations_tribble.drop()"
             for line in lines[pos + 3 : next_pos]:
                 if drop_table_sql in line.lower():
                     break
@@ -969,9 +963,7 @@ class MigrateTests(MigrationTestBase):
                     "--",
                 ],
             )
-            drop_table_sql = (
-                "drop table %s" % connection.ops.quote_name("migrations_author").lower()
-            )
+            drop_table_sql = "db.migrations_author.drop()"
             for line in lines[pos + 3 :]:
                 if drop_table_sql in line.lower():
                     break
