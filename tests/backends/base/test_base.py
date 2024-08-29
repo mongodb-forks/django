@@ -428,6 +428,7 @@ class MultiDatabaseTests(TestCase):
                         connections[db],
                         "check_database_version_supported",
                     ) as mocked_check_database_version_supported:
+                        connections[db].ensure_connection()
                         connections[db].init_connection_state()
                         after_first_calls = len(
                             mocked_check_database_version_supported.mock_calls
