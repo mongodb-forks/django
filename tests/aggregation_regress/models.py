@@ -1,4 +1,4 @@
-from django_mongodb.fields import ObjectIdAutoField
+from django_mongodb.fields import ObjectIdAutoField, ObjectIdField
 
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
@@ -19,7 +19,7 @@ class Publisher(models.Model):
 class ItemTag(models.Model):
     tag = models.CharField(max_length=100)
     content_type = models.ForeignKey(ContentType, models.CASCADE)
-    object_id = models.CharField(max_length=24)
+    object_id = ObjectIdField()
     content_object = GenericForeignKey("content_type", "object_id")
 
 
