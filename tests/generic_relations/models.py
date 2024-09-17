@@ -12,6 +12,7 @@ from complete).
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django_mongodb.fields import ObjectIdField
 
 
 class TaggedItem(models.Model):
@@ -19,7 +20,7 @@ class TaggedItem(models.Model):
 
     tag = models.SlugField()
     content_type = models.ForeignKey(ContentType, models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = ObjectIdField()
 
     content_object = GenericForeignKey()
 
@@ -40,7 +41,7 @@ class AbstractComparison(models.Model):
     content_type1 = models.ForeignKey(
         ContentType, models.CASCADE, related_name="comparative1_set"
     )
-    object_id1 = models.PositiveIntegerField()
+    object_id1 = ObjectIdField()
 
     first_obj = GenericForeignKey(ct_field="content_type1", fk_field="object_id1")
 
@@ -54,7 +55,7 @@ class Comparison(AbstractComparison):
     content_type2 = models.ForeignKey(
         ContentType, models.CASCADE, related_name="comparative2_set"
     )
-    object_id2 = models.PositiveIntegerField()
+    object_id2 = ObjectIdField()
 
     other_obj = GenericForeignKey(ct_field="content_type2", fk_field="object_id2")
 
@@ -119,20 +120,20 @@ class ValuableRock(Mineral):
 
 
 class ManualPK(models.Model):
-    id = models.IntegerField(primary_key=True)
+    id = ObjectIdField(primary_key=True)
     tags = GenericRelation(TaggedItem, related_query_name="manualpk")
 
 
 class ForProxyModelModel(models.Model):
     content_type = models.ForeignKey(ContentType, models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = ObjectIdField()
     obj = GenericForeignKey(for_concrete_model=False)
     title = models.CharField(max_length=255, null=True)
 
 
 class ForConcreteModelModel(models.Model):
     content_type = models.ForeignKey(ContentType, models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    object_id = ObjectIdField()
     obj = GenericForeignKey()
 
 
