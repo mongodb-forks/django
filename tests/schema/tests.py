@@ -1122,6 +1122,7 @@ class SchemaTests(TransactionTestCase):
         #     bool(connection.features.interprets_empty_strings_as_nulls),
         # )
 
+    @isolate_apps("schema")
     def test_alter_auto_field_to_integer_field(self):
         # Create the table
         with connection.schema_editor() as editor:
@@ -1133,11 +1134,19 @@ class SchemaTests(TransactionTestCase):
         new_field.model = Author
         with connection.schema_editor() as editor:
             editor.alter_field(Author, old_field, new_field, strict=True)
+
         # Now that ID is an IntegerField, the database raises an error if it
         # isn't provided.
+        class NewAuthor(Model):
+            id = new_field
+
+            class Meta:
+                app_label = "schema"
+                db_table = "schema_author"
+
         if not connection.features.supports_unspecified_pk:
             with self.assertRaises(DatabaseError):
-                Author.objects.create()
+                NewAuthor.objects.create()
 
     def test_alter_auto_field_to_char_field(self):
         # Create the table
