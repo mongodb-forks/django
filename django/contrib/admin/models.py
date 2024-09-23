@@ -9,7 +9,6 @@ from django.utils import timezone
 from django.utils.text import get_text_list
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
-from django_mongodb.fields import ObjectIdField
 
 ADDITION = 1
 CHANGE = 2
@@ -64,7 +63,7 @@ class LogEntry(models.Model):
         blank=True,
         null=True,
     )
-    object_id = ObjectIdField(_("object id"), blank=True, null=True)
+    object_id = models.TextField(_("object id"), blank=True, null=True)
     # Translators: 'repr' means representation
     # (https://docs.python.org/library/functions.html#repr)
     object_repr = models.CharField(_("object repr"), max_length=200)
