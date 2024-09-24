@@ -1,3 +1,5 @@
+from bson import ObjectId
+
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.prefetch import GenericPrefetch
 from django.core.exceptions import FieldError
@@ -44,7 +46,7 @@ class GenericRelationsTests(TestCase):
 
     def comp_func(self, obj):
         # Original list of tags:
-        return obj.tag, obj.content_type.model_class(), obj.object_id
+        return obj.tag, obj.content_type.model_class(), ObjectId(obj.object_id)
 
     async def test_generic_async_acreate(self):
         await self.bacon.tags.acreate(tag="orange")

@@ -3401,6 +3401,8 @@ class OperationTests(OperationTestBase):
         """
         Tests the AlterUniqueTogether operation.
         """
+        from pymongo.errors import DuplicateKeyError
+
         project_state = self.set_up_test_model("test_alunto")
         # Test the state alteration
         operation = migrations.AlterUniqueTogether("Pony", [("pink", "weight")])
@@ -3430,30 +3432,38 @@ class OperationTests(OperationTestBase):
             1,
         )
         # Make sure we can insert duplicate rows
-        with connection.cursor() as cursor:
-            cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
-            cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
-            cursor.execute("DELETE FROM test_alunto_pony")
-            # Test the database alteration
-            with connection.schema_editor() as editor:
-                operation.database_forwards(
-                    "test_alunto", editor, project_state, new_state
-                )
-            cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
-            with self.assertRaises(IntegrityError):
-                with atomic():
-                    cursor.execute(
-                        "INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)"
-                    )
-            cursor.execute("DELETE FROM test_alunto_pony")
-            # And test reversal
-            with connection.schema_editor() as editor:
-                operation.database_backwards(
-                    "test_alunto", editor, new_state, project_state
-                )
-            cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
-            cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
-            cursor.execute("DELETE FROM test_alunto_pony")
+        # with connection.cursor() as cursor:
+        # cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
+        # cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
+        # cursor.execute("DELETE FROM test_alunto_pony")
+        pony = connection.database["test_alunto_pony"]
+        pony.insert_one({"pink": 1, "weight": 1.0})
+        pony.insert_one({"pink": 1, "weight": 1.0})
+        pony.delete_many({})
+        # Test the database alteration
+        with connection.schema_editor() as editor:
+            operation.database_forwards("test_alunto", editor, project_state, new_state)
+        # cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
+        pony.insert_one({"pink": 1, "weight": 1.0})
+        with self.assertRaises(DuplicateKeyError):
+            pony.insert_one({"pink": 1, "weight": 1.0})
+            # with atomic():
+            #     cursor.execute(
+            #         "INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)"
+            #    )
+        # cursor.execute("DELETE FROM test_alunto_pony")
+        pony.delete_many({})
+        # And test reversal
+        with connection.schema_editor() as editor:
+            operation.database_backwards(
+                "test_alunto", editor, new_state, project_state
+            )
+        # cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
+        # cursor.execute("INSERT INTO test_alunto_pony (pink, weight) VALUES (1, 1)")
+        # cursor.execute("DELETE FROM test_alunto_pony")
+        pony.insert_one({"pink": 1, "weight": 1.0})
+        pony.insert_one({"pink": 1, "weight": 1.0})
+        pony.delete_many({})
         # Test flat unique_together
         operation = migrations.AlterUniqueTogether("Pony", ("pink", "weight"))
         operation.state_forwards("test_alunto", new_state)
