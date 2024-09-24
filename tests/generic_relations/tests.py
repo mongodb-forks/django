@@ -260,10 +260,11 @@ class GenericRelationsTests(TestCase):
             Animal.objects.filter(tags__tag="fatty"),
             [self.platypus],
         )
-        self.assertSequenceEqual(
-            Animal.objects.exclude(tags__tag="fatty"),
-            [self.lion],
-        )
+        # Exists is not supported in MongoDB.
+        # self.assertSequenceEqual(
+        #     Animal.objects.exclude(tags__tag="fatty"),
+        #     [self.lion],
+        # )
 
     def test_object_deletion_with_generic_relation(self):
         """
@@ -641,13 +642,9 @@ class GenericRelationsTests(TestCase):
 
     def test_cache_invalidation_for_content_type_id(self):
         # Create a Vegetable and Mineral with the same id.
-        new_id = (
-            max(
-                Vegetable.objects.order_by("-id")[0].id,
-                Mineral.objects.order_by("-id")[0].id,
-            )
-            + 1
-        )
+        from bson import ObjectId
+
+        new_id = ObjectId()
         broccoli = Vegetable.objects.create(id=new_id, name="Broccoli")
         diamond = Mineral.objects.create(id=new_id, name="Diamond", hardness=7)
         tag = TaggedItem.objects.create(content_object=broccoli, tag="yummy")

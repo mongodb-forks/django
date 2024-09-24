@@ -184,48 +184,52 @@ class GenericRelationTests(TestCase):
     def test_ticket_20378(self):
         # Create a couple of extra HasLinkThing so that the autopk value
         # isn't the same for Link and HasLinkThing.
-        hs1 = HasLinkThing.objects.create()
-        hs2 = HasLinkThing.objects.create()
+        hs1 = HasLinkThing.objects.create()  # noqa: F841
+        hs2 = HasLinkThing.objects.create()  # noqa: F841
         hs3 = HasLinkThing.objects.create()
         hs4 = HasLinkThing.objects.create()
         l1 = Link.objects.create(content_object=hs3)
         l2 = Link.objects.create(content_object=hs4)
         self.assertSequenceEqual(HasLinkThing.objects.filter(links=l1), [hs3])
         self.assertSequenceEqual(HasLinkThing.objects.filter(links=l2), [hs4])
-        self.assertSequenceEqual(
-            HasLinkThing.objects.exclude(links=l2), [hs1, hs2, hs3]
-        )
-        self.assertSequenceEqual(
-            HasLinkThing.objects.exclude(links=l1), [hs1, hs2, hs4]
-        )
+        # Exists is not supported in MongoDB.
+        # self.assertSequenceEqual(
+        #     HasLinkThing.objects.exclude(links=l2), [hs1, hs2, hs3]
+        # )
+        # self.assertSequenceEqual(
+        #     HasLinkThing.objects.exclude(links=l1), [hs1, hs2, hs4]
+        # )
 
     def test_ticket_20564(self):
         b1 = B.objects.create()
         b2 = B.objects.create()
         b3 = B.objects.create()
         c1 = C.objects.create(b=b1)
-        c2 = C.objects.create(b=b2)
+        c2 = C.objects.create(b=b2)  # noqa: F841
         c3 = C.objects.create(b=b3)
         A.objects.create(flag=None, content_object=b1)
         A.objects.create(flag=True, content_object=b2)
         self.assertSequenceEqual(C.objects.filter(b__a__flag=None), [c1, c3])
-        self.assertSequenceEqual(C.objects.exclude(b__a__flag=None), [c2])
+        # Exists is not supported in MongoDB.
+        # self.assertSequenceEqual(C.objects.exclude(b__a__flag=None), [c2])
 
     def test_ticket_20564_nullable_fk(self):
         b1 = B.objects.create()
         b2 = B.objects.create()
         b3 = B.objects.create()
         d1 = D.objects.create(b=b1)
-        d2 = D.objects.create(b=b2)
+        d2 = D.objects.create(b=b2)  # noqa: F841
         d3 = D.objects.create(b=b3)
         d4 = D.objects.create()
         A.objects.create(flag=None, content_object=b1)
         A.objects.create(flag=True, content_object=b1)
         A.objects.create(flag=True, content_object=b2)
-        self.assertSequenceEqual(D.objects.exclude(b__a__flag=None), [d2])
+        # Exists is not supported in MongoDB.
+        # self.assertSequenceEqual(D.objects.exclude(b__a__flag=None), [d2])
         self.assertSequenceEqual(D.objects.filter(b__a__flag=None), [d1, d3, d4])
         self.assertSequenceEqual(B.objects.filter(a__flag=None), [b1, b3])
-        self.assertSequenceEqual(B.objects.exclude(a__flag=None), [b2])
+        # Exists is not supported in MongoDB.
+        # self.assertSequenceEqual(B.objects.exclude(a__flag=None), [b2])
 
     def test_extra_join_condition(self):
         # A crude check that content_type_id is taken in account in the
