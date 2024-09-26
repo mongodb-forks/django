@@ -1511,6 +1511,7 @@ class ManageCheck(AdminScriptTestCase):
             ],
             sdict={
                 "DEBUG": True,
+                "DEFAULT_AUTO_FIELD": '"django_mongodb_backend.fields.ObjectIdAutoField"',  # noqa: E501
                 "MIDDLEWARE": [
                     "django.contrib.messages.middleware.MessageMiddleware",
                     "django.contrib.auth.middleware.AuthenticationMiddleware",

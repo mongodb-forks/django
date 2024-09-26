@@ -210,7 +210,7 @@ class SitesFrameworkTests(TestCase):
             check_site_id(None),
             [
                 checks.Error(
-                    msg="The SITE_ID setting must be of type int.",
+                    msg="The SITE_ID setting must be of type ObjectId.",
                     id="sites.E101",
                 ),
             ],
@@ -222,8 +222,8 @@ class SitesFrameworkTests(TestCase):
             check_site_id(None),
             [
                 checks.Error(
-                    msg="The SITE_ID setting failed to validate: ['“x” value "
-                    "must be an integer.'].",
+                    msg="The SITE_ID setting failed to validate: ['“x” is not "
+                    "a valid Object Id.'].",
                     id="sites.E101",
                 ),
             ],

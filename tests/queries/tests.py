@@ -3413,10 +3413,12 @@ class ExcludeTest17600(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        # Create a few Orders. Explicit pks needed for IntegerField pk.
-        cls.o1 = Order.objects.create(pk=1)
-        cls.o2 = Order.objects.create(pk=2)
-        cls.o3 = Order.objects.create(pk=3)
+        # Create a few Orders. Explicit pks needed for IntegerField pk;
+        # (removed in the MongoDB fork because the pk is changed to
+        # ObjectIdAutoField for compatibility in another test.)
+        cls.o1 = Order.objects.create()
+        cls.o2 = Order.objects.create()
+        cls.o3 = Order.objects.create()
 
         # Create some OrderItems for the first order with homogeneous
         # status_id values
