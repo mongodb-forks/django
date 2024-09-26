@@ -249,6 +249,8 @@ class GenericRelationTests(TestCase):
         HasLinkThing.objects.create()
         b = Board.objects.create(name=str(hs1.pk))
         Link.objects.create(content_object=hs2)
+        # An integer PK is required for the Sum() queryset that follows.
+        # Removed since not supported on MongoDB.
         link = Link.objects.create(content_object=hs1)
         Link.objects.create(content_object=b)
         qs = HasLinkThing.objects.annotate(Sum("links")).filter(pk=hs1.pk)
@@ -256,25 +258,25 @@ class GenericRelationTests(TestCase):
         # then wrong results are produced here as the link to b will also match
         # (b and hs1 have equal pks).
         self.assertEqual(qs.count(), 1)
-        self.assertEqual(qs[0].links__sum, link.id)
+        self.assertEqual(qs[0].links__sum, 0)  # Modified for MongoDB.
         link.delete()
         # Now if we don't have proper left join, we will not produce any
         # results at all here.
         # clear cached results
         qs = qs.all()
         self.assertEqual(qs.count(), 1)
-        # Note - 0 here would be a nicer result...
-        self.assertIs(qs[0].links__sum, None)
+        # Unlike other databases, MongoDB returns 0 instead of null (None).
+        self.assertIs(qs[0].links__sum, 0)
         # Finally test that filtering works.
-        self.assertEqual(qs.filter(links__sum__isnull=True).count(), 1)
-        self.assertEqual(qs.filter(links__sum__isnull=False).count(), 0)
+        self.assertEqual(qs.filter(links__sum__isnull=True).count(), 0)
+        self.assertEqual(qs.filter(links__sum__isnull=False).count(), 1)
 
     def test_filter_targets_related_pk(self):
         # Use hardcoded PKs to ensure different PKs for "link" and "hs2"
         # objects.
-        HasLinkThing.objects.create(pk=1)
-        hs2 = HasLinkThing.objects.create(pk=2)
-        link = Link.objects.create(content_object=hs2, pk=1)
+        HasLinkThing.objects.create(pk="000000000000000000000001")
+        hs2 = HasLinkThing.objects.create(pk="000000000000000000000002")
+        link = Link.objects.create(content_object=hs2, pk="000000000000000000000001")
         self.assertNotEqual(link.object_id, link.pk)
         self.assertSequenceEqual(HasLinkThing.objects.filter(links=link.pk), [hs2])
 

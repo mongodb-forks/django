@@ -6,6 +6,8 @@ from datetime import date
 from io import StringIO
 from unittest import mock
 
+from bson import ObjectId
+
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_permission_codename, management
@@ -611,7 +613,7 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
     def test_validate_fk(self):
         email = Email.objects.create(email="mymail@gmail.com")
         Group.objects.all().delete()
-        nonexistent_group_id = 1
+        nonexistent_group_id = ObjectId()
         msg = f"group instance with id {nonexistent_group_id!r} is not a valid choice."
 
         with self.assertRaisesMessage(CommandError, msg):
@@ -628,7 +630,7 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
     def test_validate_fk_environment_variable(self):
         email = Email.objects.create(email="mymail@gmail.com")
         Group.objects.all().delete()
-        nonexistent_group_id = 1
+        nonexistent_group_id = ObjectId()
         msg = f"group instance with id {nonexistent_group_id!r} is not a valid choice."
 
         with mock.patch.dict(
@@ -648,7 +650,7 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
     def test_validate_fk_via_option_interactive(self):
         email = Email.objects.create(email="mymail@gmail.com")
         Group.objects.all().delete()
-        nonexistent_group_id = 1
+        nonexistent_group_id = ObjectId()
         msg = f"group instance with id {nonexistent_group_id!r} is not a valid choice."
 
         @mock_inputs(
