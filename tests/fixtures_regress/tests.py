@@ -93,6 +93,7 @@ class TestFixtures(TestCase):
             latin_name="Ornithorhynchus anatinus",
             count=2,
             weight=2.2,
+            pk=2,
         )
         animal.save()
         self.assertGreater(animal.id, 1)
@@ -412,6 +413,7 @@ class TestFixtures(TestCase):
             latin_name="Ornithorhynchus anatinus",
             count=2,
             weight=2.2,
+            id=50,
         )
         animal.save()
 
@@ -482,7 +484,7 @@ class TestFixtures(TestCase):
         )
         self.assertJSONEqual(
             out.getvalue(),
-            '[{"pk": %d, "model": "fixtures_regress.widget", '
+            '[{"pk": "%s", "model": "fixtures_regress.widget", '
             '"fields": {"name": "grommet"}}]' % widget.pk,
         )
 
@@ -499,6 +501,7 @@ class TestFixtures(TestCase):
         self.assertEqual(Book.objects.all()[0].id, 1)
         self.assertEqual(Person.objects.all()[0].id, 4)
 
+    @skipUnlessDBFeature("supports_foreign_keys")
     def test_loaddata_raises_error_when_fixture_has_invalid_foreign_key(self):
         """
         Data with nonexistent child key references raises error.
