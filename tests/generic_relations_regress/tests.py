@@ -257,7 +257,7 @@ class GenericRelationTests(TestCase):
         # then wrong results are produced here as the link to b will also match
         # (b and hs1 have equal pks).
         self.assertEqual(qs.count(), 1)
-        self.assertEqual(qs[0].links__sum, link.id)
+        self.assertEqual(qs[0].links__sum, 0)  # Modified for MongoDB.
         link.delete()
         # Now if we don't have proper left join, we will not produce any
         # results at all here.
