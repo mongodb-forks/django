@@ -255,10 +255,9 @@ class AssertNumQueriesUponConnectionTests(TransactionTestCase):
             real_ensure_connection()
 
             if is_opening_connection:
-                # Avoid infinite recursion. Creating a cursor calls
+                # Avoid infinite recursion. get_autocommit() calls
                 # ensure_connection() which is currently mocked by this method.
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT 1" + connection.features.bare_select_suffix)
+                connection.get_autocommit()
 
         ensure_connection = (
             "django.db.backends.base.base.BaseDatabaseWrapper.ensure_connection"
@@ -2092,7 +2091,7 @@ class DisallowedDatabaseQueriesTests(SimpleTestCase):
 
     def test_disallowed_database_queries(self):
         expected_message = (
-            "Database queries to 'default' are not allowed in SimpleTestCase "
+            "Database connections to 'default' are not allowed in SimpleTestCase "
             "subclasses. Either subclass TestCase or TransactionTestCase to "
             "ensure proper test isolation or add 'default' to "
             "test_utils.tests.DisallowedDatabaseQueriesTests.databases to "
@@ -2103,7 +2102,7 @@ class DisallowedDatabaseQueriesTests(SimpleTestCase):
 
     def test_disallowed_database_chunked_cursor_queries(self):
         expected_message = (
-            "Database queries to 'default' are not allowed in SimpleTestCase "
+            "Database connections to 'default' are not allowed in SimpleTestCase "
             "subclasses. Either subclass TestCase or TransactionTestCase to "
             "ensure proper test isolation or add 'default' to "
             "test_utils.tests.DisallowedDatabaseQueriesTests.databases to "
