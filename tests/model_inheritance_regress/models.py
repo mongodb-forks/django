@@ -1,5 +1,7 @@
 import datetime
 
+from django_mongodb.fields import ObjectIdAutoField
+
 from django.db import models
 
 
@@ -195,7 +197,7 @@ class Profile(User):
 
 # Check concrete + concrete -> concrete -> concrete
 class Politician(models.Model):
-    politician_id = models.AutoField(primary_key=True)
+    politician_id = ObjectIdAutoField(primary_key=True)
     title = models.CharField(max_length=50)
 
 
