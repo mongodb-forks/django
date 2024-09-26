@@ -130,6 +130,8 @@ class DeletionTests(TestCase):
         self.assertEqual(Poet.objects.count(), 0)
 
     def test_outdated_deletion(self):
+        from bson import ObjectId
+
         poet = Poet.objects.create(name="test")
         poem = Poem.objects.create(name="Brevity is the soul of wit", poet=poet)
 
@@ -137,13 +139,14 @@ class DeletionTests(TestCase):
             Poet, Poem, fields="__all__", can_delete=True
         )
 
+        new_id = ObjectId()
         # Simulate deletion of an object that doesn't exist in the database
         data = {
             "form-TOTAL_FORMS": "2",
             "form-INITIAL_FORMS": "2",
             "form-0-id": str(poem.pk),
             "form-0-name": "foo",
-            "form-1-id": str(poem.pk + 1),  # doesn't exist
+            "form-1-id": new_id,  # doesn't exist
             "form-1-name": "bar",
             "form-1-DELETE": "on",
         }
@@ -158,7 +161,7 @@ class DeletionTests(TestCase):
         # Make sure the save went through correctly
         self.assertEqual(Poem.objects.get(pk=poem.pk).name, "foo")
         self.assertEqual(poet.poem_set.count(), 1)
-        self.assertFalse(Poem.objects.filter(pk=poem.pk + 1).exists())
+        self.assertFalse(Poem.objects.filter(pk=new_id).exists())
 
     def test_deletion_not_allowed_outside_formset_queryset(self):
         OwnerProfileFormSet = inlineformset_factory(
@@ -276,7 +279,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_form-0-name">Name:</label>'
             '<input id="id_form-0-name" type="text" name="form-0-name" '
             'value="Arthur Rimbaud" maxlength="100">'
-            '<input type="hidden" name="form-0-id" value="%d" id="id_form-0-id"></p>'
+            '<input type="hidden" name="form-0-id" value="%s" id="id_form-0-id"></p>'
             % author2.id,
         )
         self.assertHTMLEqual(
@@ -284,7 +287,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_form-1-name">Name:</label>'
             '<input id="id_form-1-name" type="text" name="form-1-name" '
             'value="Charles Baudelaire" maxlength="100">'
-            '<input type="hidden" name="form-1-id" value="%d" id="id_form-1-id"></p>'
+            '<input type="hidden" name="form-1-id" value="%s" id="id_form-1-id"></p>'
             % author1.id,
         )
         self.assertHTMLEqual(
@@ -334,7 +337,7 @@ class ModelFormsetTest(TestCase):
             'value="Arthur Rimbaud" maxlength="100"></p>'
             '<p><label for="id_form-0-DELETE">Delete:</label>'
             '<input type="checkbox" name="form-0-DELETE" id="id_form-0-DELETE">'
-            '<input type="hidden" name="form-0-id" value="%d" id="id_form-0-id"></p>'
+            '<input type="hidden" name="form-0-id" value="%s" id="id_form-0-id"></p>'
             % author2.id,
         )
         self.assertHTMLEqual(
@@ -344,7 +347,7 @@ class ModelFormsetTest(TestCase):
             'value="Charles Baudelaire" maxlength="100"></p>'
             '<p><label for="id_form-1-DELETE">Delete:</label>'
             '<input type="checkbox" name="form-1-DELETE" id="id_form-1-DELETE">'
-            '<input type="hidden" name="form-1-id" value="%d" id="id_form-1-id"></p>'
+            '<input type="hidden" name="form-1-id" value="%s" id="id_form-1-id"></p>'
             % author1.id,
         )
         self.assertHTMLEqual(
@@ -354,7 +357,7 @@ class ModelFormsetTest(TestCase):
             'value="Paul Verlaine" maxlength="100"></p>'
             '<p><label for="id_form-2-DELETE">Delete:</label>'
             '<input type="checkbox" name="form-2-DELETE" id="id_form-2-DELETE">'
-            '<input type="hidden" name="form-2-id" value="%d" id="id_form-2-id"></p>'
+            '<input type="hidden" name="form-2-id" value="%s" id="id_form-2-id"></p>'
             % author3.id,
         )
         self.assertHTMLEqual(
@@ -646,7 +649,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_form-0-write_speed">Write speed:</label>'
             '<input type="number" name="form-0-write_speed" value="10" '
             'id="id_form-0-write_speed">'
-            '<input type="hidden" name="form-0-author_ptr" value="%d" '
+            '<input type="hidden" name="form-0-author_ptr" value="%s" '
             'id="id_form-0-author_ptr"></p>' % hemingway_id,
         )
         self.assertHTMLEqual(
@@ -691,7 +694,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_book_set-0-title">Title:</label>'
             '<input id="id_book_set-0-title" type="text" name="book_set-0-title" '
             'maxlength="100">'
-            '<input type="hidden" name="book_set-0-author" value="%d" '
+            '<input type="hidden" name="book_set-0-author" value="%s" '
             'id="id_book_set-0-author">'
             '<input type="hidden" name="book_set-0-id" id="id_book_set-0-id">'
             "</p>" % author.id,
@@ -701,7 +704,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_book_set-1-title">Title:</label>'
             '<input id="id_book_set-1-title" type="text" name="book_set-1-title" '
             'maxlength="100">'
-            '<input type="hidden" name="book_set-1-author" value="%d" '
+            '<input type="hidden" name="book_set-1-author" value="%s" '
             'id="id_book_set-1-author">'
             '<input type="hidden" name="book_set-1-id" id="id_book_set-1-id"></p>'
             % author.id,
@@ -711,7 +714,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_book_set-2-title">Title:</label>'
             '<input id="id_book_set-2-title" type="text" name="book_set-2-title" '
             'maxlength="100">'
-            '<input type="hidden" name="book_set-2-author" value="%d" '
+            '<input type="hidden" name="book_set-2-author" value="%s" '
             'id="id_book_set-2-author">'
             '<input type="hidden" name="book_set-2-id" id="id_book_set-2-id"></p>'
             % author.id,
@@ -751,9 +754,9 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_book_set-0-title">Title:</label>'
             '<input id="id_book_set-0-title" type="text" name="book_set-0-title" '
             'value="Les Fleurs du Mal" maxlength="100">'
-            '<input type="hidden" name="book_set-0-author" value="%d" '
+            '<input type="hidden" name="book_set-0-author" value="%s" '
             'id="id_book_set-0-author">'
-            '<input type="hidden" name="book_set-0-id" value="%d" '
+            '<input type="hidden" name="book_set-0-id" value="%s" '
             'id="id_book_set-0-id"></p>'
             % (
                 author.id,
@@ -765,7 +768,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_book_set-1-title">Title:</label>'
             '<input id="id_book_set-1-title" type="text" name="book_set-1-title" '
             'maxlength="100">'
-            '<input type="hidden" name="book_set-1-author" value="%d" '
+            '<input type="hidden" name="book_set-1-author" value="%s" '
             'id="id_book_set-1-author">'
             '<input type="hidden" name="book_set-1-id" id="id_book_set-1-id"></p>'
             % author.id,
@@ -775,7 +778,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_book_set-2-title">Title:</label>'
             '<input id="id_book_set-2-title" type="text" name="book_set-2-title" '
             'maxlength="100">'
-            '<input type="hidden" name="book_set-2-author" value="%d" '
+            '<input type="hidden" name="book_set-2-author" value="%s" '
             'id="id_book_set-2-author">'
             '<input type="hidden" name="book_set-2-id" id="id_book_set-2-id"></p>'
             % author.id,
@@ -1258,7 +1261,7 @@ class ModelFormsetTest(TestCase):
             'value="Joe Perry" maxlength="100">'
             '<input type="hidden" name="owner_set-0-place" value="1" '
             'id="id_owner_set-0-place">'
-            '<input type="hidden" name="owner_set-0-auto_id" value="%d" '
+            '<input type="hidden" name="owner_set-0-auto_id" value="%s" '
             'id="id_owner_set-0-auto_id"></p>' % owner1.auto_id,
         )
         self.assertHTMLEqual(
@@ -1310,8 +1313,8 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_form-0-owner">Owner:</label>'
             '<select name="form-0-owner" id="id_form-0-owner">'
             '<option value="" selected>---------</option>'
-            '<option value="%d">Joe Perry at Giordanos</option>'
-            '<option value="%d">Jack Berry at Giordanos</option>'
+            '<option value="%s">Joe Perry at Giordanos</option>'
+            '<option value="%s">Jack Berry at Giordanos</option>'
             "</select></p>"
             '<p><label for="id_form-0-age">Age:</label>'
             '<input type="number" name="form-0-age" id="id_form-0-age" min="0"></p>'
@@ -1331,7 +1334,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_ownerprofile-0-age">Age:</label>'
             '<input type="number" name="ownerprofile-0-age" '
             'id="id_ownerprofile-0-age" min="0">'
-            '<input type="hidden" name="ownerprofile-0-owner" value="%d" '
+            '<input type="hidden" name="ownerprofile-0-owner" value="%s" '
             'id="id_ownerprofile-0-owner"></p>' % owner1.auto_id,
         )
 
@@ -1357,7 +1360,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_ownerprofile-0-age">Age:</label>'
             '<input type="number" name="ownerprofile-0-age" value="54" '
             'id="id_ownerprofile-0-age" min="0">'
-            '<input type="hidden" name="ownerprofile-0-owner" value="%d" '
+            '<input type="hidden" name="ownerprofile-0-owner" value="%s" '
             'id="id_ownerprofile-0-owner"></p>' % owner1.auto_id,
         )
 
@@ -1630,7 +1633,7 @@ class ModelFormsetTest(TestCase):
             '<p><label for="id_membership_set-0-karma">Karma:</label>'
             '<input type="number" name="membership_set-0-karma" '
             'id="id_membership_set-0-karma">'
-            '<input type="hidden" name="membership_set-0-person" value="%d" '
+            '<input type="hidden" name="membership_set-0-person" value="%s" '
             'id="id_membership_set-0-person">'
             '<input type="hidden" name="membership_set-0-id" '
             'id="id_membership_set-0-id"></p>' % person.id,
