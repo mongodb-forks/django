@@ -741,13 +741,13 @@ class LookupTests(TestCase):
                 "id", "id_plus_one"
             ),
             [
-                {"id": self.a5.id, "id_plus_one": self.a5.id + 1},
-                {"id": self.a6.id, "id_plus_one": self.a6.id + 1},
-                {"id": self.a4.id, "id_plus_one": self.a4.id + 1},
-                {"id": self.a2.id, "id_plus_one": self.a2.id + 1},
-                {"id": self.a3.id, "id_plus_one": self.a3.id + 1},
-                {"id": self.a7.id, "id_plus_one": self.a7.id + 1},
-                {"id": self.a1.id, "id_plus_one": self.a1.id + 1},
+                {"id": self.a5.id, "id_plus_one": self.a5.id},
+                {"id": self.a6.id, "id_plus_one": self.a6.id},
+                {"id": self.a4.id, "id_plus_one": self.a4.id},
+                {"id": self.a2.id, "id_plus_one": self.a2.id},
+                {"id": self.a3.id, "id_plus_one": self.a3.id},
+                {"id": self.a7.id, "id_plus_one": self.a7.id},
+                {"id": self.a1.id, "id_plus_one": self.a1.id},
             ],
         )
         data = {
