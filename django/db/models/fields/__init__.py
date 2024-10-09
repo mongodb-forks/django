@@ -391,7 +391,10 @@ class Field(RegisterLookupMixin):
 
         if (
             self.db_default is NOT_PROVIDED
-            or isinstance(self.db_default, Value)
+            or (
+                isinstance(self.db_default, Value)
+                or not hasattr(self.db_default, "resolve_expression")
+            )
             or databases is None
         ):
             return []
