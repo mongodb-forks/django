@@ -405,9 +405,9 @@ class PartialIndexTests(TransactionTestCase):
                     ),
                 ),
             )
-            self.assertIn(
-                "WHERE %s" % editor.quote_name("pub_date"),
-                str(index.create_sql(Article, schema_editor=editor)),
+            self.assertEqual(
+                "{'pub_date': {'$gt': datetime.datetime(2015, 1, 1, 6, 0)}}",
+                str(index._get_condition_mql(Article, schema_editor=editor)),
             )
             editor.add_index(index=index, model=Article)
             with connection.cursor() as cursor:
@@ -424,12 +424,13 @@ class PartialIndexTests(TransactionTestCase):
         with connection.schema_editor() as editor:
             index = Index(
                 name="recent_article_idx",
-                fields=["id"],
+                # This is changed
+                fields=["headline"],
                 condition=Q(pk__gt=1),
             )
-            self.assertIn(
-                "WHERE %s" % editor.quote_name("id"),
-                str(index.create_sql(Article, schema_editor=editor)),
+            self.assertEqual(
+                "{'_id': {'$gt': 1}}",
+                str(index._get_condition_mql(Article, schema_editor=editor)),
             )
             editor.add_index(index=index, model=Article)
             with connection.cursor() as cursor:
@@ -449,9 +450,9 @@ class PartialIndexTests(TransactionTestCase):
                 fields=["published"],
                 condition=Q(published=True),
             )
-            self.assertIn(
-                "WHERE %s" % editor.quote_name("published"),
-                str(index.create_sql(Article, schema_editor=editor)),
+            self.assertEqual(
+                "{'published': {'$eq': True}}",
+                str(index._get_condition_mql(Article, schema_editor=editor)),
             )
             editor.add_index(index=index, model=Article)
             with connection.cursor() as cursor:
@@ -482,12 +483,13 @@ class PartialIndexTests(TransactionTestCase):
                     & Q(headline__contains="China")
                 ),
             )
-            sql = str(index.create_sql(Article, schema_editor=editor))
-            where = sql.find("WHERE")
-            self.assertIn("WHERE (%s" % editor.quote_name("pub_date"), sql)
+            sql = str(index._get_condition_mql(Article, schema_editor=editor))
+            self.assertEqual(sql, "... TO FILL IN ...")
+            # where = sql.find("WHERE")
+            # self.assertIn("WHERE (%s" % editor.quote_name("pub_date"), sql)
             # Because each backend has different syntax for the operators,
             # check ONLY the occurrence of headline in the SQL.
-            self.assertGreater(sql.rfind("headline"), where)
+            # self.assertGreater(sql.rfind("headline"), where)
             editor.add_index(index=index, model=Article)
             with connection.cursor() as cursor:
                 self.assertIn(
@@ -506,9 +508,10 @@ class PartialIndexTests(TransactionTestCase):
                 fields=["pub_date"],
                 condition=Q(pub_date__isnull=False),
             )
-            self.assertIn(
-                "WHERE %s IS NOT NULL" % editor.quote_name("pub_date"),
+
+            self.assertEqual(
                 str(index.create_sql(Article, schema_editor=editor)),
+                "... TO FILL IN ...",
             )
             editor.add_index(index=index, model=Article)
             with connection.cursor() as cursor:
