@@ -1001,6 +1001,7 @@ class UniqueConstraintTests(TestCase):
             exclude={"name"},
         )
 
+    @skipUnlessDBFeature("supports_partial_indexes")
     def test_validate_expression_condition(self):
         constraint = models.UniqueConstraint(
             Lower("name"),
