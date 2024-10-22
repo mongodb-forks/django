@@ -22,8 +22,12 @@ class IterableFieldsTests(TestCase):
     unordered_ints = [4, 2, 6, 1]
 
     def setUp(self):
-        for i, float in zip(range(1, 5), self.floats):
-            ListModel(integer=i, floating_point=float, names=self.names[:i]).save()
+        self.objs = [
+            ListModel.objects.create(
+                integer=i, floating_point=self.floats[i], names=self.names[: i + 1]
+            )
+            for i in range(4)
+        ]
 
     def test_startswith(self):
         self.assertEqual(
@@ -86,7 +90,7 @@ class IterableFieldsTests(TestCase):
             dict(
                 [
                     (entity.pk, entity.names)
-                    for entity in ListModel.objects.filter(names__gt="Kakashi")
+                    for entity in ListModel.objects.filter(names__gt=["Naruto"])
                 ]
             ),
             dict(
@@ -151,17 +155,15 @@ class IterableFieldsTests(TestCase):
         )
 
     def test_equals(self):
-        self.assertEqual(
-            [entity.names for entity in ListModel.objects.filter(names="Sakura")],
-            [["Kakashi", "Naruto", "Sasuke", "Sakura"]],
+        self.assertQuerySetEqual(
+            ListModel.objects.filter(names=["Kakashi"]),
+            [self.objs[0]],
         )
 
         # Test with additonal pk filter (for DBs that have special pk
         # queries).
-        query = ListModel.objects.filter(names="Sakura")
-        self.assertEqual(
-            query.get(pk=query[0].pk).names, ["Kakashi", "Naruto", "Sasuke", "Sakura"]
-        )
+        query = ListModel.objects.filter(names=["Kakashi"])
+        self.assertEqual(query.get(pk=query[0].pk).names, ["Kakashi"])
 
     def test_is_null(self):
         self.assertEqual(ListModel.objects.filter(names__isnull=True).count(), 0)
@@ -231,13 +233,15 @@ class IterableFieldsTests(TestCase):
             [["Kakashi", "Naruto", "Sasuke", "Sakura"]],
         )
 
-    def test_list_with_foreignkeys(self):
+    def test_list_with_foreign_keys(self):
         model1 = Model.objects.create()
         model2 = Model.objects.create()
         ReferenceList.objects.create(keys=[model1.pk, model2.pk])
 
         self.assertEqual(ReferenceList.objects.get().keys[0], model1.pk)
-        self.assertEqual(ReferenceList.objects.filter(keys=model1.pk).count(), 1)
+        self.assertEqual(
+            ReferenceList.objects.filter(keys=[model1.pk, model2.pk]).count(), 1
+        )
 
     def test_list_with_foreign_conversion(self):
         decimal = DecimalKey.objects.create(decimal=Decimal("1.5"))

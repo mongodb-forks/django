@@ -117,7 +117,9 @@ class EmbeddedModelFieldTests(TestCase):
         )
         obj = EmbeddedModelFieldModel.objects.get()
         # self.assertIn(5, obj.typed_list[1].setfield)
-        self.assertEqual([target.index for target in obj.ordered_list], range(1, 6))
+        self.assertEqual(
+            [target.index for target in obj.ordered_list], list(range(1, 6))
+        )
 
     def test_untyped_listfield(self):
         EmbeddedModelFieldModel.objects.create(
@@ -133,7 +135,7 @@ class EmbeddedModelFieldTests(TestCase):
         ):
             self.assertIsInstance(instance, cls)
         self.assertNotEqual(instances[0].auto_now, None)
-        self.assertEqual(instances[1].ordered_ints, range(1, 6))
+        self.assertEqual(instances[1].ordered_ints, list(range(1, 6)))
 
     def _test_untyped_dict(self):
         EmbeddedModelFieldModel.objects.create(
@@ -147,7 +149,7 @@ class EmbeddedModelFieldTests(TestCase):
         # self.assertIsInstance(data["a"], SetModel)
         # self.assertNotEqual(data["c"].auto_now["y"], None)
 
-    def test_foreignkey_in_embedded_object(self):
+    def test_foreign_key_in_embedded_object(self):
         simple = EmbeddedModel(some_relation=Target.objects.create(index=1))
         obj = EmbeddedModelFieldModel.objects.create(simple=simple)
         simple = EmbeddedModelFieldModel.objects.get().simple
