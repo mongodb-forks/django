@@ -13,6 +13,8 @@ import tempfile
 import warnings
 from pathlib import Path
 
+import django_mongodb
+
 try:
     import django
 except ImportError as e:
@@ -59,6 +61,10 @@ warnings.simplefilter("error", RuntimeWarning)
 gc.set_threshold(100_000)
 
 RUNTESTS_DIR = os.path.abspath(os.path.dirname(__file__))
+
+MONGODB_TEST_DIR = Path(django_mongodb.__file__).parent.parent / "test"
+
+sys.path.append(str(MONGODB_TEST_DIR))
 
 TEMPLATE_DIR = os.path.join(RUNTESTS_DIR, "templates")
 
@@ -141,6 +147,21 @@ def get_test_modules(gis_enabled):
                 if dirname:
                     test_module = dirname + "." + test_module
                 yield test_module
+
+    # Add MongoDB-specific tests
+    dirpath = os.path.join(MONGODB_TEST_DIR, dirname)
+    with os.scandir(dirpath) as entries:
+        for f in entries:
+            if (
+                "." in f.name
+                or f.is_file()
+                or not os.path.exists(os.path.join(f.path, "__init__.py"))
+            ):
+                continue
+            test_module = f.name
+            if dirname:
+                test_module = dirname + "." + test_module
+            yield test_module
 
 
 def get_label_module(label):
