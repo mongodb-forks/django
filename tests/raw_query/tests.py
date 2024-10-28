@@ -81,7 +81,7 @@ class RawQueryTests(TestCase):
         Execute the passed query against the passed model and check the output
         """
         results = list(
-            model.objects.raw(query, params=params, translations=translations)
+            model.objects.raw_mql(query, params=params, translations=translations)
         )
         self.assertProcessed(model, results, expected_results, expected_annotations)
         self.assertAnnotations(results, expected_annotations)
@@ -145,7 +145,7 @@ class RawQueryTests(TestCase):
         Raw queries are lazy: they aren't actually executed until they're
         iterated over.
         """
-        q = Author.objects.raw("SELECT * FROM raw_query_author")
+        q = Author.objects.raw_mql("SELECT * FROM raw_query_author")
         self.assertIsNone(q.query.cursor)
         list(q)
         self.assertIsNotNone(q.query.cursor)
@@ -211,7 +211,7 @@ class RawQueryTests(TestCase):
         query = "SELECT * FROM raw_query_author WHERE first_name = %s"
         author = Author.objects.all()[2]
         params = [author.first_name]
-        qset = Author.objects.raw(query, params=params)
+        qset = Author.objects.raw_mql(query, params=params)
         results = list(qset)
         self.assertProcessed(Author, results, [author])
         self.assertNoAnnotations(results)
@@ -220,12 +220,12 @@ class RawQueryTests(TestCase):
 
     def test_params_none(self):
         query = "SELECT * FROM raw_query_author WHERE first_name like 'J%'"
-        qset = Author.objects.raw(query, params=None)
+        qset = Author.objects.raw_mql(query, params=None)
         self.assertEqual(len(qset), 2)
 
     def test_escaped_percent(self):
         query = "SELECT * FROM raw_query_author WHERE first_name like 'J%%'"
-        qset = Author.objects.raw(query)
+        qset = Author.objects.raw_mql(query)
         self.assertEqual(len(qset), 2)
 
     @skipUnlessDBFeature("supports_paramstyle_pyformat")
@@ -236,7 +236,7 @@ class RawQueryTests(TestCase):
         query = "SELECT * FROM raw_query_author WHERE first_name = %(first)s"
         author = Author.objects.all()[2]
         params = {"first": author.first_name}
-        qset = Author.objects.raw(query, params=params)
+        qset = Author.objects.raw_mql(query, params=params)
         results = list(qset)
         self.assertProcessed(Author, results, [author])
         self.assertNoAnnotations(results)
@@ -248,7 +248,7 @@ class RawQueryTests(TestCase):
         Test representation of raw query with parameters
         """
         query = "SELECT * FROM raw_query_author WHERE last_name = %(last)s"
-        qset = Author.objects.raw(query, {"last": "foo"})
+        qset = Author.objects.raw_mql(query, {"last": "foo"})
         self.assertEqual(
             repr(qset),
             "<RawQuerySet: SELECT * FROM raw_query_author WHERE last_name = foo>",
@@ -259,7 +259,7 @@ class RawQueryTests(TestCase):
         )
 
         query = "SELECT * FROM raw_query_author WHERE last_name = %s"
-        qset = Author.objects.raw(query, {"foo"})
+        qset = Author.objects.raw_mql(query, {"foo"})
         self.assertEqual(
             repr(qset),
             "<RawQuerySet: SELECT * FROM raw_query_author WHERE last_name = foo>",
@@ -286,7 +286,7 @@ class RawQueryTests(TestCase):
 
     def test_missing_fields(self):
         query = "SELECT id, first_name, dob FROM raw_query_author"
-        for author in Author.objects.raw(query):
+        for author in Author.objects.raw_mql(query):
             self.assertIsNotNone(author.first_name)
             # last_name isn't given, but it will be retrieved on demand
             self.assertIsNotNone(author.last_name)
@@ -295,7 +295,7 @@ class RawQueryTests(TestCase):
         query = "SELECT first_name, dob FROM raw_query_author"
         msg = "Raw query must include the primary key"
         with self.assertRaisesMessage(FieldDoesNotExist, msg):
-            list(Author.objects.raw(query))
+            list(Author.objects.raw_mql(query))
 
     def test_annotations(self):
         query = (
@@ -321,7 +321,7 @@ class RawQueryTests(TestCase):
     def test_multiple_iterations(self):
         query = "SELECT * FROM raw_query_author"
         normal_authors = Author.objects.all()
-        raw_authors = Author.objects.raw(query)
+        raw_authors = Author.objects.raw_mql(query)
 
         # First Iteration
         first_iterations = 0
@@ -340,30 +340,30 @@ class RawQueryTests(TestCase):
     def test_get_item(self):
         # Indexing on RawQuerySets
         query = "SELECT * FROM raw_query_author ORDER BY id ASC"
-        third_author = Author.objects.raw(query)[2]
+        third_author = Author.objects.raw_mql(query)[2]
         self.assertEqual(third_author.first_name, "Bob")
 
-        first_two = Author.objects.raw(query)[0:2]
+        first_two = Author.objects.raw_mql(query)[0:2]
         self.assertEqual(len(first_two), 2)
 
         with self.assertRaises(TypeError):
-            Author.objects.raw(query)["test"]
+            Author.objects.raw_mql(query)["test"]
 
     def test_inheritance(self):
         f = FriendlyAuthor.objects.create(
             first_name="Wesley", last_name="Chun", dob=date(1962, 10, 28)
         )
         query = "SELECT * FROM raw_query_friendlyauthor"
-        self.assertEqual([o.pk for o in FriendlyAuthor.objects.raw(query)], [f.pk])
+        self.assertEqual([o.pk for o in FriendlyAuthor.objects.raw_mql(query)], [f.pk])
 
     def test_query_count(self):
         self.assertNumQueries(
-            1, list, Author.objects.raw("SELECT * FROM raw_query_author")
+            1, list, Author.objects.raw_mql("SELECT * FROM raw_query_author")
         )
 
     def test_subquery_in_raw_sql(self):
         list(
-            Book.objects.raw(
+            Book.objects.raw_mql(
                 "SELECT id FROM "
                 "(SELECT * FROM raw_query_book WHERE paperback IS NOT NULL) sq"
             )
@@ -380,7 +380,7 @@ class RawQueryTests(TestCase):
         b = BookFkAsPk.objects.create(book=self.b1)
         self.assertEqual(
             list(
-                BookFkAsPk.objects.raw(
+                BookFkAsPk.objects.raw_mql(
                     "SELECT not_the_default FROM raw_query_bookfkaspk"
                 )
             ),
@@ -389,31 +389,31 @@ class RawQueryTests(TestCase):
 
     def test_decimal_parameter(self):
         c = Coffee.objects.create(brand="starbucks", price=20.5)
-        qs = Coffee.objects.raw(
+        qs = Coffee.objects.raw_mql(
             "SELECT * FROM raw_query_coffee WHERE price >= %s", params=[Decimal(20)]
         )
         self.assertEqual(list(qs), [c])
 
     def test_result_caching(self):
         with self.assertNumQueries(1):
-            books = Book.objects.raw("SELECT * FROM raw_query_book")
+            books = Book.objects.raw_mql("SELECT * FROM raw_query_book")
             list(books)
             list(books)
 
     def test_iterator(self):
         with self.assertNumQueries(2):
-            books = Book.objects.raw("SELECT * FROM raw_query_book")
+            books = Book.objects.raw_mql("SELECT * FROM raw_query_book")
             list(books.iterator())
             list(books.iterator())
 
     def test_bool(self):
-        self.assertIs(bool(Book.objects.raw("SELECT * FROM raw_query_book")), True)
+        self.assertIs(bool(Book.objects.raw_mql("SELECT * FROM raw_query_book")), True)
         self.assertIs(
-            bool(Book.objects.raw("SELECT * FROM raw_query_book WHERE id = 0")), False
+            bool(Book.objects.raw_mql("SELECT * FROM raw_query_book WHERE id = 0")), False
         )
 
     def test_len(self):
-        self.assertEqual(len(Book.objects.raw("SELECT * FROM raw_query_book")), 4)
+        self.assertEqual(len(Book.objects.raw_mql("SELECT * FROM raw_query_book")), 4)
         self.assertEqual(
-            len(Book.objects.raw("SELECT * FROM raw_query_book WHERE id = 0")), 0
+            len(Book.objects.raw_mql("SELECT * FROM raw_query_book WHERE id = 0")), 0
         )

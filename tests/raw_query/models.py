@@ -1,10 +1,12 @@
 from django.db import models
+from django_mongodb.manager import MongoManager
 
 
 class Author(models.Model):
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     dob = models.DateField()
+    objects = MongoManager()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -22,26 +24,31 @@ class Book(models.Model):
     author = models.ForeignKey(Author, models.CASCADE)
     paperback = models.BooleanField(default=False)
     opening_line = models.TextField()
+    objects = MongoManager()
 
 
 class BookFkAsPk(models.Model):
     book = models.ForeignKey(
         Book, models.CASCADE, primary_key=True, db_column="not_the_default"
     )
+    objects = MongoManager()
 
 
 class Coffee(models.Model):
     brand = models.CharField(max_length=255, db_column="name")
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    objects = MongoManager()
 
 
 class MixedCaseIDColumn(models.Model):
     id = models.AutoField(primary_key=True, db_column="MiXeD_CaSe_Id")
+    objects = MongoManager()
 
 
 class Reviewer(models.Model):
     reviewed = models.ManyToManyField(Book)
+    objects = MongoManager()
 
 
 class FriendlyAuthor(Author):
-    pass
+    objects = MongoManager()
