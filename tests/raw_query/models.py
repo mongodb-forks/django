@@ -1,8 +1,10 @@
 from django.db import models
 from django_mongodb.manager import MongoManager
+from django_mongodb.fields import ObjectIdAutoField
 
 
 class Author(models.Model):
+    id = ObjectIdAutoField(primary_key=True)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     dob = models.DateField()
@@ -20,6 +22,7 @@ class Author(models.Model):
 
 
 class Book(models.Model):
+    id = ObjectIdAutoField(primary_key=True)
     title = models.CharField(max_length=255)
     author = models.ForeignKey(Author, models.CASCADE)
     paperback = models.BooleanField(default=False)
@@ -35,17 +38,20 @@ class BookFkAsPk(models.Model):
 
 
 class Coffee(models.Model):
+    id = ObjectIdAutoField(primary_key=True)
     brand = models.CharField(max_length=255, db_column="name")
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     objects = MongoManager()
 
 
 class MixedCaseIDColumn(models.Model):
-    id = models.AutoField(primary_key=True, db_column="MiXeD_CaSe_Id")
+    # id = models.AutoField(primary_key=True,
+    id = ObjectIdAutoField(primary_key=True, db_column="MiXeD_CaSe_Id")
     objects = MongoManager()
 
 
 class Reviewer(models.Model):
+    id = ObjectIdAutoField(primary_key=True)
     reviewed = models.ManyToManyField(Book)
     objects = MongoManager()
 
