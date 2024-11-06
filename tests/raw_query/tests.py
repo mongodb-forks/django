@@ -2,8 +2,8 @@ from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models.query import RawQuerySet
 from django.test import TestCase, skipUnlessDBFeature
+from django_mongodb.query import MongoRawQuerySet
 
 from .models import (
     Author,
@@ -83,6 +83,7 @@ class RawQueryTests(TestCase):
         results = list(
             model.objects.raw_mql(query, params=params, translations=translations)
         )
+        print(results)
         self.assertProcessed(model, results, expected_results, expected_annotations)
         self.assertAnnotations(results, expected_annotations)
 
@@ -124,19 +125,19 @@ class RawQueryTests(TestCase):
                 self.assertEqual(getattr(result, annotation), value)
 
     def test_rawqueryset_repr(self):
-        queryset = RawQuerySet(raw_query="SELECT * FROM raw_query_author")
+        queryset = MongoRawQuerySet(raw_query=[])
         self.assertEqual(
-            repr(queryset), "<RawQuerySet: SELECT * FROM raw_query_author>"
+            repr(queryset), "<MongoRawQuerySet: []>"
         )
         self.assertEqual(
-            repr(queryset.query), "<RawQuery: SELECT * FROM raw_query_author>"
+            repr(queryset.query), "<MongoRawQuery: []>"
         )
 
     def test_simple_raw_query(self):
         """
         Basic test of raw query with a simple database query
         """
-        query = "SELECT * FROM raw_query_author"
+        query = []
         authors = Author.objects.all()
         self.assertSuccessfulRawQuery(Author, query, authors)
 
@@ -145,7 +146,7 @@ class RawQueryTests(TestCase):
         Raw queries are lazy: they aren't actually executed until they're
         iterated over.
         """
-        q = Author.objects.raw_mql("SELECT * FROM raw_query_author")
+        q = Author.objects.raw_mql([])
         self.assertIsNone(q.query.cursor)
         list(q)
         self.assertIsNotNone(q.query.cursor)
@@ -154,7 +155,7 @@ class RawQueryTests(TestCase):
         """
         Test of a simple raw query against a model containing a foreign key
         """
-        query = "SELECT * FROM raw_query_book"
+        query = []
         books = Book.objects.all()
         self.assertSuccessfulRawQuery(Book, query, books)
 
@@ -163,7 +164,7 @@ class RawQueryTests(TestCase):
         Test of a simple raw query against a model containing a field with
         db_column defined.
         """
-        query = "SELECT * FROM raw_query_coffee"
+        query = []
         coffees = Coffee.objects.all()
         self.assertSuccessfulRawQuery(Coffee, query, coffees)
 
@@ -171,7 +172,7 @@ class RawQueryTests(TestCase):
         """
         A raw query with a model that has a pk db_column with mixed case.
         """
-        query = "SELECT * FROM raw_query_mixedcaseidcolumn"
+        query = []
         queryset = MixedCaseIDColumn.objects.all()
         self.assertSuccessfulRawQuery(MixedCaseIDColumn, query, queryset)
 
@@ -185,9 +186,8 @@ class RawQueryTests(TestCase):
             ("last_name, dob, first_name, id"),
             ("first_name, last_name, dob, id"),
         )
-
         for select in selects:
-            query = "SELECT %s FROM raw_query_author" % select
+            query = [{"$match": {}}]
             authors = Author.objects.all()
             self.assertSuccessfulRawQuery(Author, query, authors)
 
