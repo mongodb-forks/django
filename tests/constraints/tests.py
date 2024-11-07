@@ -821,10 +821,10 @@ class UniqueConstraintTests(TestCase):
 
     @skipUnlessDBFeature("supports_partial_indexes")
     def test_database_constraint_with_condition(self):
-        UniqueConstraintConditionProduct.objects.create(name="p1")
-        UniqueConstraintConditionProduct.objects.create(name="p2")
+        UniqueConstraintConditionProduct.objects.create(name="p1", color="blue")
+        UniqueConstraintConditionProduct.objects.create(name="p2", color="blue")
         with self.assertRaises(IntegrityError):
-            UniqueConstraintConditionProduct.objects.create(name="p1")
+            UniqueConstraintConditionProduct.objects.create(name="p1", color="blue")
 
     def test_model_validation(self):
         msg = "Unique constraint product with this Name and Color already exists."
@@ -945,7 +945,7 @@ class UniqueConstraintTests(TestCase):
         constraint = models.UniqueConstraint(
             fields=["name"],
             name="name_without_color_uniq",
-            condition=models.Q(color__isnull=True),
+            condition=models.Q(color="blue"),
             violation_error_code="custom_code",
             violation_error_message="Custom message",
         )
@@ -953,7 +953,7 @@ class UniqueConstraintTests(TestCase):
         with self.assertRaisesMessage(ValidationError, msg) as cm:
             constraint.validate(
                 UniqueConstraintConditionProduct,
-                UniqueConstraintConditionProduct(name=p1.name, color=None),
+                UniqueConstraintConditionProduct(name=p1.name, color="blue"),
             )
         self.assertEqual(cm.exception.code, "custom_code")
 
@@ -1006,7 +1006,7 @@ class UniqueConstraintTests(TestCase):
         constraint = models.UniqueConstraint(
             Lower("name"),
             name="name_lower_without_color_uniq",
-            condition=models.Q(color__isnull=True),
+            condition=models.Q(color="blue"),
         )
         non_unique_product = UniqueConstraintProduct(name=self.p2.name.upper())
         msg = "Constraint “name_lower_without_color_uniq” is violated."
