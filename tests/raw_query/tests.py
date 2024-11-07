@@ -83,7 +83,6 @@ class RawQueryTests(TestCase):
         results = list(
             model.objects.raw_mql(query, params=params, translations=translations)
         )
-        print(results)
         self.assertProcessed(model, results, expected_results, expected_annotations)
         self.assertAnnotations(results, expected_annotations)
 
@@ -178,7 +177,7 @@ class RawQueryTests(TestCase):
 
     def test_order_handler(self):
         """
-        Test of raw raw query's tolerance for columns being returned in any
+        Test of raw query's tolerance for columns being returned in any
         order
         """
         selects = (
@@ -187,7 +186,9 @@ class RawQueryTests(TestCase):
             ("first_name, last_name, dob, id"),
         )
         for select in selects:
-            query = [{"$match": {}}]
+            cols = [col.strip() for col in select.split(',')]
+            select = {col: 1 for col in cols}
+            query = [{"$project": select}]
             authors = Author.objects.all()
             self.assertSuccessfulRawQuery(Author, query, authors)
 
