@@ -274,13 +274,13 @@ class RawQueryTests(TestCase):
         """
         Test of a simple raw query against a model containing a m2m field
         """
-        query = "SELECT * FROM raw_query_reviewer"
+        query = []
         reviewers = Reviewer.objects.all()
         self.assertSuccessfulRawQuery(Reviewer, query, reviewers)
 
     def test_extra_conversions(self):
         """Extra translations are ignored."""
-        query = "SELECT * FROM raw_query_author"
+        query = []
         translations = {"something": "else"}
         authors = Author.objects.all()
         self.assertSuccessfulRawQuery(Author, query, authors, translations=translations)
@@ -320,7 +320,7 @@ class RawQueryTests(TestCase):
         self.assertSuccessfulRawQuery(Author, query, authors)
 
     def test_multiple_iterations(self):
-        query = "SELECT * FROM raw_query_author"
+        query = []
         normal_authors = Author.objects.all()
         raw_authors = Author.objects.raw_mql(query)
 
@@ -354,12 +354,12 @@ class RawQueryTests(TestCase):
         f = FriendlyAuthor.objects.create(
             first_name="Wesley", last_name="Chun", dob=date(1962, 10, 28)
         )
-        query = "SELECT * FROM raw_query_friendlyauthor"
+        query = []
         self.assertEqual([o.pk for o in FriendlyAuthor.objects.raw_mql(query)], [f.pk])
 
     def test_query_count(self):
         self.assertNumQueries(
-            1, list, Author.objects.raw_mql("SELECT * FROM raw_query_author")
+            1, list, Author.objects.raw_mql([])
         )
 
     def test_subquery_in_raw_sql(self):
@@ -397,24 +397,24 @@ class RawQueryTests(TestCase):
 
     def test_result_caching(self):
         with self.assertNumQueries(1):
-            books = Book.objects.raw_mql("SELECT * FROM raw_query_book")
+            books = Book.objects.raw_mql([])
             list(books)
             list(books)
 
     def test_iterator(self):
         with self.assertNumQueries(2):
-            books = Book.objects.raw_mql("SELECT * FROM raw_query_book")
+            books = Book.objects.raw_mql([])
             list(books.iterator())
             list(books.iterator())
 
     def test_bool(self):
-        self.assertIs(bool(Book.objects.raw_mql("SELECT * FROM raw_query_book")), True)
+        self.assertIs(bool(Book.objects.raw_mql([]), True)
         self.assertIs(
             bool(Book.objects.raw_mql("SELECT * FROM raw_query_book WHERE id = 0")), False
         )
 
     def test_len(self):
-        self.assertEqual(len(Book.objects.raw_mql("SELECT * FROM raw_query_book")), 4)
+        self.assertEqual(len(Book.objects.raw_mql([])), 4)
         self.assertEqual(
             len(Book.objects.raw_mql("SELECT * FROM raw_query_book WHERE id = 0")), 0
         )
