@@ -408,7 +408,7 @@ class RawQueryTests(TestCase):
             list(books.iterator())
 
     def test_bool(self):
-        self.assertIs(bool(Book.objects.raw_mql([]), True)
+        self.assertIs(bool(Book.objects.raw_mql([])), True)
         self.assertIs(
             bool(Book.objects.raw_mql("SELECT * FROM raw_query_book WHERE id = 0")), False
         )
