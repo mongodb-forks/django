@@ -248,26 +248,26 @@ class RawQueryTests(TestCase):
         """
         Test representation of raw query with parameters
         """
-        query = "SELECT * FROM raw_query_author WHERE last_name = %(last)s"
-        qset = Author.objects.raw_mql(query, {"last": "foo"})
+        query = [{"$match": {"last_name": "%(last)s" % {"last": "foo"}}}]
+        qset = Author.objects.raw_mql(query)
         self.assertEqual(
             repr(qset),
-            "<RawQuerySet: SELECT * FROM raw_query_author WHERE last_name = foo>",
+            "<MongoRawQuerySet: [{'$match': {'last_name': 'foo'}}]>",
         )
         self.assertEqual(
             repr(qset.query),
-            "<RawQuery: SELECT * FROM raw_query_author WHERE last_name = foo>",
+            "<MongoRawQuery: [{'$match': {'last_name': 'foo'}}]>",
         )
 
-        query = "SELECT * FROM raw_query_author WHERE last_name = %s"
-        qset = Author.objects.raw_mql(query, {"foo"})
+        query = [{"$match": {"last_name": "%s" % "foo"}}]
+        qset = Author.objects.raw_mql(query)
         self.assertEqual(
             repr(qset),
-            "<RawQuerySet: SELECT * FROM raw_query_author WHERE last_name = foo>",
+            "<MongoRawQuerySet: [{'$match': {'last_name': 'foo'}}]>",
         )
         self.assertEqual(
             repr(qset.query),
-            "<RawQuery: SELECT * FROM raw_query_author WHERE last_name = foo>",
+            "<MongoRawQuery: [{'$match': {'last_name': 'foo'}}]>",
         )
 
     def test_many_to_many(self):
