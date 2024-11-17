@@ -4,7 +4,7 @@ Various complex queries that have been problematic in the past.
 
 import datetime
 
-from django_mongodb.fields import ObjectIdAutoField
+from django_mongodb.fields import ObjectIdAutoField, ObjectIdField
 
 from django.db import connection, models
 from django.db.models.functions import Now
@@ -438,7 +438,7 @@ class ChildObjectA(ObjectA):
 class ObjectB(models.Model):
     name = models.CharField(max_length=50)
     objecta = models.ForeignKey(ObjectA, models.CASCADE)
-    num = models.CharField(max_length=24)
+    num = ObjectIdField()
 
     def __str__(self):
         return self.name
@@ -650,7 +650,7 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, models.CASCADE, related_name="items")
-    status = models.CharField(max_length=24)
+    status = ObjectIdField()
 
     class Meta:
         ordering = ("pk",)
