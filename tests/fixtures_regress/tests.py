@@ -1,10 +1,11 @@
 # Unittests for fixtures.
 import json
 import os
-import re
 import unittest
 from io import StringIO
 from pathlib import Path
+
+from bson import ObjectId
 
 from django.core import management, serializers
 from django.core.exceptions import ImproperlyConfigured
@@ -94,10 +95,10 @@ class TestFixtures(TestCase):
             latin_name="Ornithorhynchus anatinus",
             count=2,
             weight=2.2,
-            pk=2,
+            pk="000000000000000000000002",
         )
         animal.save()
-        self.assertGreater(animal.id, 1)
+        self.assertGreater(animal.id, ObjectId("000000000000000000000001"))
 
     def test_loaddata_not_found_fields_not_ignore(self):
         """
@@ -345,8 +346,12 @@ class TestFixtures(TestCase):
             "model-inheritance.json",
             verbosity=0,
         )
-        self.assertEqual(Parent.objects.all()[0].id, 1)
-        self.assertEqual(Child.objects.all()[0].id, 1)
+        self.assertEqual(
+            Parent.objects.all()[0].id, ObjectId("000000000000000000000001")
+        )
+        self.assertEqual(
+            Child.objects.all()[0].id, ObjectId("000000000000000000000001")
+        )
 
     def test_close_connection_after_loaddata(self):
         """
@@ -361,15 +366,17 @@ class TestFixtures(TestCase):
             "big-fixture.json",
             verbosity=0,
         )
-        articles = Article.objects.exclude(id=9)
+        articles = Article.objects.exclude(id="000000000000000000000009")
         self.assertEqual(
-            list(articles.values_list("id", flat=True)), [1, 2, 3, 4, 5, 6, 7, 8]
+            list(articles.values_list("id", flat=True)),
+            [ObjectId(f"{i:024}") for i in range(1, 9)],
         )
         # Just for good measure, run the same query again.
         # Under the influence of ticket #7572, this will
         # give a different result to the previous call.
         self.assertEqual(
-            list(articles.values_list("id", flat=True)), [1, 2, 3, 4, 5, 6, 7, 8]
+            list(articles.values_list("id", flat=True)),
+            [ObjectId(f"{i:024}") for i in range(1, 9)],
         )
 
     def test_field_value_coerce(self):
@@ -413,7 +420,7 @@ class TestFixtures(TestCase):
             latin_name="Ornithorhynchus anatinus",
             count=2,
             weight=2.2,
-            id=50,
+            id="000000000000000000000050",
         )
         animal.save()
 
@@ -427,15 +434,10 @@ class TestFixtures(TestCase):
 
         # Output order isn't guaranteed, so check for parts
         data = out.getvalue()
-
-        # Get rid of artifacts like '000000002' to eliminate the differences
-        # between different Python versions.
-        data = re.sub("0{6,}[0-9]", "", data)
-
         animals_data = sorted(
             [
                 {
-                    "pk": 1,
+                    "pk": "000000000000000000000001",
                     "model": "fixtures_regress.animal",
                     "fields": {
                         "count": 3,
@@ -445,7 +447,7 @@ class TestFixtures(TestCase):
                     },
                 },
                 {
-                    "pk": 10,
+                    "pk": "000000000000000000000010",
                     "model": "fixtures_regress.animal",
                     "fields": {
                         "count": 42,
@@ -455,7 +457,7 @@ class TestFixtures(TestCase):
                     },
                 },
                 {
-                    "pk": animal.pk,
+                    "pk": str(animal.pk),
                     "model": "fixtures_regress.animal",
                     "fields": {
                         "count": 2,
@@ -503,8 +505,10 @@ class TestFixtures(TestCase):
             "forward_ref.json",
             verbosity=0,
         )
-        self.assertEqual(Book.objects.all()[0].id, 1)
-        self.assertEqual(Person.objects.all()[0].id, 4)
+        self.assertEqual(Book.objects.all()[0].id, ObjectId("000000000000000000000001"))
+        self.assertEqual(
+            Person.objects.all()[0].id, ObjectId("000000000000000000000004")
+        )
 
     @skipUnlessDBFeature("supports_foreign_keys")
     def test_loaddata_raises_error_when_fixture_has_invalid_foreign_key(self):
@@ -536,8 +540,10 @@ class TestFixtures(TestCase):
             "forward_ref_2.json",
             verbosity=0,
         )
-        self.assertEqual(Book.objects.all()[0].id, 1)
-        self.assertEqual(Person.objects.all()[0].id, 4)
+        self.assertEqual(Book.objects.all()[0].id, ObjectId("000000000000000000000001"))
+        self.assertEqual(
+            Person.objects.all()[0].id, ObjectId("000000000000000000000004")
+        )
 
     def test_loaddata_no_fixture_specified(self):
         """
@@ -647,7 +653,11 @@ class TestFixtures(TestCase):
     @override_settings(FIXTURE_DIRS=[Path(_cur_dir) / "fixtures_1"])
     def test_fixtures_dir_pathlib(self):
         management.call_command("loaddata", "inner/absolute.json", verbosity=0)
-        self.assertQuerySetEqual(Absolute.objects.all(), [1], transform=lambda o: o.pk)
+        self.assertQuerySetEqual(
+            Absolute.objects.all(),
+            [ObjectId("000000000000000000000001")],
+            transform=lambda o: o.pk,
+        )
 
 
 class NaturalKeyFixtureTests(TestCase):
@@ -666,9 +676,13 @@ class NaturalKeyFixtureTests(TestCase):
             "nk-inheritance.json",
             verbosity=0,
         )
-        self.assertEqual(NKChild.objects.get(pk=1).data, "apple")
+        self.assertEqual(
+            NKChild.objects.get(pk="000000000000000000000001").data, "apple"
+        )
 
-        self.assertEqual(RefToNKChild.objects.get(pk=1).nk_fk.data, "apple")
+        self.assertEqual(
+            RefToNKChild.objects.get(pk="000000000000000000000001").nk_fk.data, "apple"
+        )
 
     def test_nk_deserialize_xml(self):
         """
@@ -690,8 +704,12 @@ class NaturalKeyFixtureTests(TestCase):
             "nk-inheritance2.xml",
             verbosity=0,
         )
-        self.assertEqual(NKChild.objects.get(pk=2).data, "banana")
-        self.assertEqual(RefToNKChild.objects.get(pk=2).nk_fk.data, "apple")
+        self.assertEqual(
+            NKChild.objects.get(pk="000000000000000000000002").data, "banana"
+        )
+        self.assertEqual(
+            RefToNKChild.objects.get(pk="000000000000000000000002").nk_fk.data, "apple"
+        )
 
     def test_nk_on_serialize(self):
         """
@@ -723,7 +741,7 @@ class NaturalKeyFixtureTests(TestCase):
             {"fields": {"main": null, "name": "Borders"},
             "model": "fixtures_regress.store"},
             {"fields": {"name": "Neal Stephenson"}, "model": "fixtures_regress.person"},
-            {"pk": 1, "model": "fixtures_regress.book",
+            {"pk": "000000000000000000000001", "model": "fixtures_regress.book",
             "fields": {"stores": [["Amazon"], ["Borders"]],
             "name": "Cryptonomicon", "author": ["Neal Stephenson"]}}]
             """,

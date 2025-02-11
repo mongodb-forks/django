@@ -600,9 +600,11 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
     def test_validate_fk(self):
         email = Email.objects.create(email="mymail@gmail.com")
         Group.objects.all().delete()
-        nonexistent_group_id = 1
-        msg = f"group instance with id {nonexistent_group_id} is not a valid choice."
-
+        nonexistent_group_id = "000000000000000000000001"
+        msg = (
+            f"group instance with id ObjectId('{nonexistent_group_id}') is "
+            "not a valid choice."
+        )
         with self.assertRaisesMessage(CommandError, msg):
             call_command(
                 "createsuperuser",
@@ -620,8 +622,10 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
         email = Email.objects.create(email="mymail@gmail.com")
         Group.objects.all().delete()
         nonexistent_group_id = ObjectId()
-        msg = f"group instance with id {nonexistent_group_id!r} is not a valid choice."
-
+        msg = (
+            f"group instance with id ObjectId('{nonexistent_group_id}') is "
+            "not a valid choice."
+        )
         with mock.patch.dict(
             os.environ,
             {"DJANGO_SUPERUSER_GROUP": str(nonexistent_group_id)},
@@ -639,8 +643,11 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
     def test_validate_fk_via_option_interactive(self):
         email = Email.objects.create(email="mymail@gmail.com")
         Group.objects.all().delete()
-        nonexistent_group_id = 1
-        msg = f"group instance with id {nonexistent_group_id} is not a valid choice."
+        nonexistent_group_id = "000000000000000000000001"
+        msg = (
+            f"group instance with id ObjectId('{nonexistent_group_id}') is "
+            "not a valid choice."
+        )
 
         @mock_inputs(
             {
