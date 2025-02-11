@@ -307,7 +307,7 @@ class TestSaveLoad(TestCase):
     @skipUnlessDBFeature("supports_primitives_in_json_field")
     def test_bulk_update_custom_get_prep_value(self):
         objs = CustomSerializationJSONModel.objects.bulk_create(
-            [CustomSerializationJSONModel(pk=1, json_field={"version": "1"})]
+            [CustomSerializationJSONModel(json_field={"version": "1"})]
         )
         objs[0].json_field["version"] = "1-alpha"
         CustomSerializationJSONModel.objects.bulk_update(objs, ["json_field"])
