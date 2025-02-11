@@ -14,6 +14,7 @@ import warnings
 from pathlib import Path
 
 import django_mongodb_backend
+from bson import ObjectId
 
 try:
     import django
@@ -249,7 +250,7 @@ def setup_collect_tests(start_at, start_after, test_labels=None):
         }
     ]
     settings.LANGUAGE_CODE = "en"
-    settings.SITE_ID = 1
+    settings.SITE_ID = ObjectId("000000000000000000000001")
     settings.MIDDLEWARE = ALWAYS_MIDDLEWARE
     settings.MIGRATION_MODULES = {
         # This lets us skip creating migrations for the test models as many of
@@ -272,6 +273,7 @@ def setup_collect_tests(start_at, start_after, test_labels=None):
         "fields.W906",
         # django.contrib.postgres.fields.CITextField deprecated.
         "fields.W907",
+        "sites.E101",  # SITE_ID must be an ObjectId for MongoDB.
     ]
 
     # Load all the ALWAYS_INSTALLED_APPS.
