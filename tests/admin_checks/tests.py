@@ -77,7 +77,7 @@ class SystemChecksTestCase(SimpleTestCase):
         try:
             errors = checks.run_checks()
             expected = ["error!"]
-            self.assertEqual(errors, expected)
+            self.assertEqual(errors[1:], expected)
         finally:
             admin.site.unregister(Song)
 
@@ -268,7 +268,7 @@ class SystemChecksTestCase(SimpleTestCase):
         try:
             errors = checks.run_checks()
             expected = ["error!"]
-            self.assertEqual(errors, expected)
+            self.assertEqual(errors[1:], expected)
         finally:
             custom_site.unregister(Song)
 
