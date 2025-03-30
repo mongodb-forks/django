@@ -1,3 +1,4 @@
+import contextlib
 import functools
 import re
 from collections import defaultdict, namedtuple
@@ -5,7 +6,11 @@ from enum import Enum
 from graphlib import TopologicalSorter
 from itertools import chain
 
+# from django_mongodb_backend.models import EMBEDDED
+from django_mongodb_backend.indexes import FieldColumn
+
 from django.conf import settings
+from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.db.migrations import operations
 from django.db.migrations.migration import Migration
@@ -150,13 +155,17 @@ class MigrationAutodetector:
 
         # Prepare some old/new state and model lists, separating
         # proxy models and ignoring unmigrated apps.
+        self.old_embedded_keys = set()
         self.old_model_keys = set()
         self.old_proxy_keys = set()
         self.old_unmanaged_keys = set()
+        self.new_embedded_keys = set()
         self.new_model_keys = set()
         self.new_proxy_keys = set()
         self.new_unmanaged_keys = set()
         for (app_label, model_name), model_state in self.from_state.models.items():
+            # if model_state.options.get("db_table") is EMBEDDED:
+            #     self.old_embedded_keys.add((app_label, model_name))
             if not model_state.options.get("managed", True):
                 self.old_unmanaged_keys.add((app_label, model_name))
             elif app_label not in self.from_state.real_apps:
@@ -166,6 +175,8 @@ class MigrationAutodetector:
                     self.old_model_keys.add((app_label, model_name))
 
         for (app_label, model_name), model_state in self.to_state.models.items():
+            # if model_state.options.get("db_table") is EMBEDDED:
+            #     self.new_embedded_keys.add((app_label, model_name))
             if not model_state.options.get("managed", True):
                 self.new_unmanaged_keys.add((app_label, model_name))
             elif app_label not in self.from_state.real_apps or (
@@ -215,6 +226,7 @@ class MigrationAutodetector:
         self.generate_removed_altered_unique_together()
         # Generate field operations.
         self.generate_removed_fields()
+        self.generate_removed_embedded_fields()
         self.generate_added_fields()
         self.generate_altered_fields()
         self.generate_altered_order_with_respect_to()
@@ -223,6 +235,9 @@ class MigrationAutodetector:
         self.generate_added_constraints()
         self.generate_altered_constraints()
         self.generate_altered_db_table()
+
+        # Generate embedded field operations.
+        self.generate_added_embedded_fields()
 
         self._sort_migrations()
         self._build_migration_list(graph)
@@ -252,6 +267,51 @@ class MigrationAutodetector:
             for app_label, model_name in self.kept_model_keys
             for field_name in self.to_state.models[app_label, model_name].fields
         }
+
+        def get_field_path(model_state, path):
+            pass
+
+        # New/old embedded field keys
+        # (app_label, model_name, embedded field name path)
+        self.old_embedded_field_keys = {}
+        for app_label, model_name in self.kept_model_keys:
+            for field_name, field in self.from_state.models[
+                app_label, self.renamed_models.get((app_label, model_name), model_name)
+            ].fields.items():
+                if hasattr(field, "embedded_model"):
+                    if isinstance(field.embedded_model, str):
+                        model_label = field.embedded_model
+                    else:
+                        model_label = field.embedded_model._meta.label_lower
+
+                    model_lookup = tuple(model_label.split("."))
+                    embedded_model = self.from_state.models[
+                        app_label,
+                        self.renamed_models.get(model_lookup, model_lookup[1]),
+                    ]
+                    field_column = field.get_attname_column()[1]
+                    for subfield_name, subfield in embedded_model.fields.items():
+                        subfield_column = subfield.get_attname_column()[1]
+                        self.old_embedded_field_keys[
+                            (app_label, model_name, f"{field.name}.{subfield.name}")
+                        ] = f"{field_column}.{subfield_column}"
+                        # Check for nested embeds.
+
+        self.new_embedded_field_keys = {}
+        for app_label, model_name in self.kept_model_keys:
+            for field_name, field in self.to_state.models[
+                app_label, model_name
+            ].fields.items():
+                if hasattr(field, "embedded_model"):
+                    embedded_model = self.to_state.models[
+                        *field.embedded_model.split(".")
+                    ]
+                    field_column = field.get_attname_column()[1]
+                    for subfield_name, subfield in embedded_model.fields.items():
+                        subfield_column = subfield.get_attname_column()[1]
+                        self.new_embedded_field_keys[
+                            (app_label, model_name, f"{field.name}.{subfield.name}")
+                        ] = f"{field_column}.{subfield_column}"
 
     def _generate_through_model_map(self):
         """Through model map generation."""
@@ -1465,6 +1525,99 @@ class MigrationAutodetector:
                 }
             )
 
+    def generate_added_embedded_fields(self):
+        """Make AddEmbeddedField operations."""
+        for app_label, model_name, field_name in sorted(
+            set(self.new_embedded_field_keys) - set(self.old_embedded_field_keys)
+        ):
+            self._generate_added_embedded_field(app_label, model_name, field_name)
+
+    def _generate_added_embedded_field(self, app_label, model_name, field_name):
+        from django_mongodb_backend.db.migrations.operations import AddEmbeddedField
+
+        field = self.get_field(self.to_state.models[app_label, model_name], field_name)
+        # Adding a field always depends at least on its removal.
+        dependencies = [
+            OperationDependency(
+                app_label, model_name, field_name, OperationDependency.Type.REMOVE
+            )
+        ]
+        # You can't just add NOT NULL fields with no default or fields
+        # which don't allow empty strings as default.
+        time_fields = (models.DateField, models.DateTimeField, models.TimeField)
+        preserve_default = (
+            field.null
+            or field.has_default()
+            or (field.blank and field.empty_strings_allowed)
+            or (isinstance(field, time_fields) and field.auto_now)
+        )
+        if not preserve_default:
+            field = field.clone()
+            if isinstance(field, time_fields) and field.auto_now_add:
+                field.default = self.questioner.ask_auto_now_add_addition(
+                    field_name, model_name
+                )
+            else:
+                field.default = self.questioner.ask_not_null_addition(
+                    field_name, model_name
+                )
+        if field.unique and field.has_default() and callable(field.default):
+            self.questioner.ask_unique_callable_default_addition(field_name, model_name)
+        self.add_operation(
+            app_label,
+            AddEmbeddedField(
+                model_name=model_name,
+                name=self.new_embedded_field_keys[app_label, model_name, field_name],
+                field=field,
+                preserve_default=preserve_default,
+            ),
+            dependencies=dependencies,
+        )
+
+    def generate_removed_embedded_fields(self):
+        """Make RemoveEmbeddedField operations."""
+        for app_label, model_name, field_name in sorted(
+            set(self.old_embedded_field_keys) - set(self.new_embedded_field_keys)
+        ):
+            self._generate_removed_embedded_field(app_label, model_name, field_name)
+
+    def _generate_removed_embedded_field(self, app_label, model_name, field_name):
+        from django_mongodb_backend.db.migrations.operations import RemoveEmbeddedField
+
+        self.add_operation(
+            app_label,
+            RemoveEmbeddedField(
+                model_name=model_name,
+                name=field_name,
+            ),
+            # Include dependencies such as order_with_respect_to, constraints,
+            # and any generated fields that may depend on this field. These
+            # are safely ignored if not present.
+            dependencies=[
+                OperationDependency(
+                    app_label,
+                    model_name,
+                    field_name,
+                    OperationDependency.Type.REMOVE_ORDER_WRT,
+                ),
+                OperationDependency(
+                    app_label,
+                    model_name,
+                    field_name,
+                    OperationDependency.Type.ALTER_FOO_TOGETHER,
+                ),
+                OperationDependency(
+                    app_label,
+                    model_name,
+                    field_name,
+                    OperationDependency.Type.REMOVE_INDEX_OR_CONSTRAINT,
+                ),
+                *self._get_generated_field_dependencies_for_removed_field(
+                    app_label, model_name, field_name
+                ),
+            ],
+        )
+
     def generate_added_indexes(self):
         for (app_label, model_name), alt_indexes in self.altered_indexes.items():
             dependencies = self._get_dependencies_for_model(app_label, model_name)
@@ -2064,3 +2217,41 @@ class MigrationAutodetector:
         if match:
             return int(match[0])
         return None
+
+    def get_field(self, model, field_name):
+        """
+        A version of Model_.meta.get_field() that can retrieve embedded model
+        fields.
+        """
+        path = []
+        base_model = model
+        *parents, leaf = field_name.split(".")
+        for i, name in enumerate(parents):
+            field = model.get_field(name)
+            path.append(getattr(field, "column", field.get_attname_column()[1]))
+            # For EmbeddedModelFields, advance to the embedded model and
+            # continue to loop, searching for the next field.
+            if hasattr(field, "embedded_model"):
+                model = field.embedded_model
+            # For PolymorphicEmbeddedModelFields, recurse into each embedded
+            # model until the field is found.
+            elif models := getattr(field, "embedded_models", None):
+                for submodel in models:
+                    with contextlib.suppress(FieldDoesNotExist):
+                        subfield = self.get_field(
+                            submodel, ".".join([*parents[i + 1 :], leaf])
+                        )
+                        path.extend(subfield.column.split("."))
+                        return FieldColumn(subfield.field, ".".join(path))
+                raise FieldDoesNotExist(
+                    f"The models of field '{'.'.join(parents)}' have no field "
+                    f"named '{leaf}'."
+                )
+            else:
+                raise FieldDoesNotExist(
+                    f"{base_model.__name__} has no field named '{field_name}'."
+                )
+        # Add the final field.
+        model = self.to_state.models[tuple(model.split("."))]
+        field = model.get_field(leaf)
+        return field
