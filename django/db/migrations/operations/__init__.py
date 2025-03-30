@@ -1,6 +1,7 @@
 from .fields import AddField, AlterField, RemoveField, RenameField
 from .models import (
     AddConstraint,
+    AddEmbeddedIndex,
     AddIndex,
     AlterConstraint,
     AlterIndexTogether,
@@ -43,4 +44,5 @@ __all__ = [
     "RunPython",
     "AlterOrderWithRespectTo",
     "AlterModelManagers",
+    "AddEmbeddedIndex",
 ]
