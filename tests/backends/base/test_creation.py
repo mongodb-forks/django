@@ -77,6 +77,9 @@ class TestDbCreationTests(SimpleTestCase):
         if connection.vendor == "oracle":
             # Don't close connection on Oracle.
             creation.connection.close = mock.Mock()
+        if connection.vendor == "mongodb":
+            # Don't close connection pool on MongoDB.
+            creation.connection.close_pool = mock.Mock()
         old_database_name = test_connection.settings_dict["NAME"]
         try:
             with mock.patch.object(creation, "_create_test_db"):
@@ -107,6 +110,9 @@ class TestDbCreationTests(SimpleTestCase):
         if connection.vendor == "oracle":
             # Don't close connection on Oracle.
             creation.connection.close = mock.Mock()
+        if connection.vendor == "mongodb":
+            # Don't close connection pool on MongoDB.
+            creation.connection.close_pool = mock.Mock()
         old_database_name = test_connection.settings_dict["NAME"]
         try:
             with mock.patch.object(creation, "_create_test_db"):
@@ -131,6 +137,9 @@ class TestDbCreationTests(SimpleTestCase):
         if connection.vendor == "oracle":
             # Don't close connection on Oracle.
             creation.connection.close = mock.Mock()
+        if connection.vendor == "mongodb":
+            # Don't close connection pool on MongoDB.
+            creation.connection.close_pool = mock.Mock()
         old_database_name = test_connection.settings_dict["NAME"]
         try:
             with mock.patch.object(creation, "_create_test_db"):
@@ -161,6 +170,9 @@ class TestDbCreationTests(SimpleTestCase):
         if connection.vendor == "oracle":
             # Don't close connection on Oracle.
             creation.connection.close = mock.Mock()
+        if connection.vendor == "mongodb":
+            # Don't close connection pool on MongoDB.
+            creation.connection.close_pool = mock.Mock()
         old_database_name = test_connection.settings_dict["NAME"]
         try:
             with mock.patch.object(creation, "_create_test_db"):
@@ -178,6 +190,9 @@ class TestDbCreationTests(SimpleTestCase):
         if connection.vendor == "oracle":
             # Don't close connection on Oracle.
             creation.connection.close = mock.Mock()
+        if connection.vendor == "mongodb":
+            # Don't close connection pool on MongoDB.
+            creation.connection.close_pool = mock.Mock()
         old_database_name = test_connection.settings_dict["NAME"]
         msg = (
             "DatabaseCreation.create_test_db(serialize) is deprecated. Call "
