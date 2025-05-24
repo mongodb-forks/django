@@ -132,7 +132,7 @@ def get_test_modules(gis_enabled):
         # GIS tests are in nested apps
         discovery_dirs.append("gis_tests")
     else:
-        SUBDIRS_TO_SKIP[""].add("gis_tests")
+        SUBDIRS_TO_SKIP[""].update({"gis_tests", "gis_tests_"})
 
     for dirname in discovery_dirs:
         dirpath = os.path.join(RUNTESTS_DIR, dirname)
@@ -152,19 +152,16 @@ def get_test_modules(gis_enabled):
                 yield test_module
 
     # Discover tests in django_mongodb_backend/tests.
-    dirpath = os.path.join(MONGODB_TEST_DIR, dirname)
-    with os.scandir(dirpath) as entries:
+    with os.scandir(MONGODB_TEST_DIR) as entries:
         for f in entries:
             if (
                 "." in f.name
+                or os.path.basename(f.name) in subdirs_to_skip
                 or f.is_file()
                 or not os.path.exists(os.path.join(f.path, "__init__.py"))
             ):
                 continue
-            test_module = f.name
-            if dirname:
-                test_module = dirname + "." + test_module
-            yield test_module
+            yield f.name
 
 
 def get_label_module(label):
