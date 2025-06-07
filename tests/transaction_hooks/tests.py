@@ -108,6 +108,7 @@ class TestConnectionOnCommit(TransactionTestCase):
             self.assertNotified([])
         self.assertDone([1])
 
+    @skipUnlessDBFeature("uses_savepoints")
     def test_discards_hooks_from_rolled_back_savepoint(self):
         with transaction.atomic():
             # one successful savepoint
@@ -139,6 +140,7 @@ class TestConnectionOnCommit(TransactionTestCase):
 
         self.assertDone([])
 
+    @skipUnlessDBFeature("uses_savepoints")
     def test_inner_savepoint_rolled_back_with_outer(self):
         with transaction.atomic():
             try:
@@ -164,6 +166,7 @@ class TestConnectionOnCommit(TransactionTestCase):
 
         self.assertDone([])
 
+    @skipUnlessDBFeature("uses_savepoints")
     def test_inner_savepoint_does_not_affect_outer(self):
         with transaction.atomic():
             with transaction.atomic():
@@ -210,7 +213,7 @@ class TestConnectionOnCommit(TransactionTestCase):
     def test_hooks_cleared_on_reconnect(self):
         with transaction.atomic():
             self.do(1)
-            connection.close()
+            connection.close_pool()
 
         connection.connect()
 
@@ -275,6 +278,7 @@ class TestConnectionOnCommit(TransactionTestCase):
             with self.assertRaisesMessage(transaction.TransactionManagementError, msg):
                 transaction.on_commit(should_never_be_called)
         finally:
+            connection.commit()  # Prevent transaction from leaking.
             connection.set_autocommit(True)
 
     def test_raises_exception_non_callable(self):

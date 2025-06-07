@@ -215,12 +215,13 @@ class GetOrCreateTests(TestCase):
         self.assertFalse(created)
 
 
-class GetOrCreateTestsWithManualPKs(TestCase):
+class GetOrCreateTestsWithManualPKs(TransactionTestCase):
+    available_apps = ["get_or_create"]
+
     id = "000000000000000000000001"
 
-    @classmethod
-    def setUpTestData(cls):
-        ManualPrimaryKeyTest.objects.create(id=cls.id, data="Original")
+    def setUp(self):
+        ManualPrimaryKeyTest.objects.create(id=self.id, data="Original")
 
     def test_create_with_duplicate_primary_key(self):
         """
@@ -270,7 +271,9 @@ class GetOrCreateTransactionTests(TransactionTestCase):
             self.skipTest("This backend does not support integrity checks.")
 
 
-class GetOrCreateThroughManyToMany(TestCase):
+class GetOrCreateThroughManyToMany(TransactionTestCase):
+    available_apps = ["get_or_create"]
+
     def test_get_get_or_create(self):
         tag = Tag.objects.create(text="foo")
         a_thing = Thing.objects.create(name="a")
@@ -613,7 +616,9 @@ class UpdateOrCreateTests(TestCase):
                 self.assertNotIn(connection.ops.quote_name("name"), update_sql)
 
 
-class UpdateOrCreateTestsWithManualPKs(TestCase):
+class UpdateOrCreateTestsWithManualPKs(TransactionTestCase):
+    available_apps = ["get_or_create"]
+
     def test_create_with_duplicate_primary_key(self):
         """
         If an existing primary key is specified with different values for other
