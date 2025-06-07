@@ -61,6 +61,7 @@ class DatabaseWrapperTests(SimpleTestCase):
             connection.check_database_version_supported()
 
 
+@skipUnlessDBFeature("supports_transactions")
 class DatabaseWrapperLoggingTests(TransactionTestCase):
     available_apps = ["backends"]
 
@@ -73,17 +74,23 @@ class DatabaseWrapperLoggingTests(TransactionTestCase):
                     Person.objects.create(first_name="first", last_name="last")
 
                 self.assertGreaterEqual(len(conn.queries_log), 3)
-                self.assertEqual(conn.queries_log[-3]["sql"], "BEGIN")
+                self.assertEqual(
+                    conn.queries_log[-3]["sql"], "session.start_transaction()"
+                )
                 self.assertRegex(
                     cm.output[0],
                     r"DEBUG:django.db.backends:\(\d+.\d{3}\) "
-                    rf"BEGIN; args=None; alias={DEFAULT_DB_ALIAS}",
+                    r"session.start_transaction\(\); args=None; "
+                    f"alias={DEFAULT_DB_ALIAS}",
                 )
-                self.assertEqual(conn.queries_log[-1]["sql"], "COMMIT")
+                self.assertEqual(
+                    conn.queries_log[-1]["sql"], "session.commit_transaction()"
+                )
                 self.assertRegex(
                     cm.output[-1],
                     r"DEBUG:django.db.backends:\(\d+.\d{3}\) "
-                    rf"COMMIT; args=None; alias={DEFAULT_DB_ALIAS}",
+                    r"session.commit_transaction\(\); args=None; "
+                    f"alias={DEFAULT_DB_ALIAS}",
                 )
 
     @override_settings(DEBUG=True)
@@ -95,11 +102,14 @@ class DatabaseWrapperLoggingTests(TransactionTestCase):
                     Person.objects.create(first_name="first", last_name="last")
                     raise Exception("Force rollback")
 
-                self.assertEqual(conn.queries_log[-1]["sql"], "ROLLBACK")
+                self.assertEqual(
+                    conn.queries_log[-1]["sql"], "session.abort_transaction()"
+                )
                 self.assertRegex(
                     cm.output[-1],
                     r"DEBUG:django.db.backends:\(\d+.\d{3}\) "
-                    rf"ROLLBACK; args=None; alias={DEFAULT_DB_ALIAS}",
+                    r"session.abort_transaction\(\); args=None; "
+                    f"alias={DEFAULT_DB_ALIAS}",
                 )
 
     def test_no_logs_without_debug(self):
