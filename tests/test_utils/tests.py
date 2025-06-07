@@ -1881,7 +1881,7 @@ class OverrideSettingsTests(SimpleTestCase):
             self.assertIn(expected_location, finder.locations)
 
 
-@skipUnlessDBFeature("supports_transactions")
+@skipUnlessDBFeature("supports_transactions", "uses_savepoints")
 class TestBadSetUpTestData(TestCase):
     """
     An exception in setUpTestData() shouldn't leak a transaction which would
@@ -1969,6 +1969,7 @@ class CaptureOnCommitCallbacksTests(TestCase):
         self.assertEqual(len(callbacks), 1)
         self.assertNotEqual(callbacks[0], pre_hook)
 
+    @skipUnlessDBFeature("uses_savepoints")
     def test_with_rolled_back_savepoint(self):
         with self.captureOnCommitCallbacks() as callbacks:
             try:

@@ -460,6 +460,7 @@ class AtomicMiscTests(TransactionTestCase):
                 # This is expected to fail because the savepoint no longer exists.
                 connection.savepoint_rollback(sid)
 
+    @skipUnlessDBFeature("supports_transactions")
     def test_mark_for_rollback_on_error_in_transaction(self):
         with transaction.atomic(savepoint=False):
             # Swallow the intentional error raised.
@@ -505,6 +506,7 @@ class AtomicMiscTests(TransactionTestCase):
         Reporter.objects.create()
 
 
+@skipUnlessDBFeature("supports_transactions")
 class NonAutocommitTests(TransactionTestCase):
     available_apps = []
 

@@ -9,6 +9,8 @@ from http import cookies
 from pathlib import Path
 from unittest import mock
 
+from asgiref.sync import sync_to_async
+
 from django.conf import settings
 from django.contrib.sessions.backends.base import SessionBase, UpdateError
 from django.contrib.sessions.backends.cache import SessionStore as CacheSession
@@ -27,6 +29,7 @@ from django.core.cache import caches
 from django.core.cache.backends.base import InvalidCacheBackendError
 from django.core.exceptions import ImproperlyConfigured
 from django.core.signing import TimestampSigner
+from django.db import connection
 from django.http import HttpResponse
 from django.test import (
     RequestFactory,
@@ -748,6 +751,28 @@ class DatabaseSessionTests(SessionTestsMixin, TestCase):
         await other_session.aclear_expired()
         self.assertEqual(await self.model.objects.acount(), 1)
 
+    def test_session_save_does_not_resurrect_session_logged_out_in_other_context(self):
+        f = connection.features
+        if f.supports_transactions and not f.uses_savepoints:
+            raise self.skipTest("Requires savepoints if transactions are supported.")
+        super().test_session_save_does_not_resurrect_session_logged_out_in_other_context()  # noqa: E501
+
+    async def test_session_asave_does_not_resurrect_session_logged_out_in_other_context(
+        self,
+    ):
+        # Unsure if this is the best way to make sure connection.features is
+        # usable.
+        await sync_to_async(connection.ensure_connection)()
+
+        @sync_to_async
+        def should_skip():
+            f = connection.features
+            return f.supports_transactions and not f.uses_savepoints
+
+        if await should_skip():
+            raise self.skipTest("Requires savepoints if transactions are supported.")
+        await super().test_session_asave_does_not_resurrect_session_logged_out_in_other_context()  # noqa: E501
+
 
 @override_settings(USE_TZ=True)
 class DatabaseSessionWithTimeZoneTests(DatabaseSessionTests):
@@ -857,6 +882,28 @@ class CacheDBSessionTests(SessionTestsMixin, TestCase):
         log = cm.records[-1]
         self.assertEqual(log.message, f"Error saving to cache ({session._cache})")
         self.assertEqual(str(log.exc_info[1]), "Faked exception saving to cache")
+
+    def test_session_save_does_not_resurrect_session_logged_out_in_other_context(self):
+        f = connection.features
+        if f.supports_transactions and not f.uses_savepoints:
+            raise self.skipTest("Requires savepoints if transactions are supported.")
+        super().test_session_save_does_not_resurrect_session_logged_out_in_other_context()  # noqa: E501
+
+    async def test_session_asave_does_not_resurrect_session_logged_out_in_other_context(
+        self,
+    ):
+        # Unsure if this is the best way to make sure connection.features is
+        # usable.
+        await sync_to_async(connection.ensure_connection)()
+
+        @sync_to_async
+        def should_skip():
+            f = connection.features
+            return f.supports_transactions and not f.uses_savepoints
+
+        if await should_skip():
+            raise self.skipTest("Requires savepoints if transactions are supported.")
+        await super().test_session_asave_does_not_resurrect_session_logged_out_in_other_context()  # noqa: E501
 
 
 @override_settings(USE_TZ=True)
