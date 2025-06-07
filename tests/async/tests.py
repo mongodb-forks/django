@@ -7,7 +7,7 @@ from asgiref.sync import async_to_sync, iscoroutinefunction
 from django.core.cache import DEFAULT_CACHE_ALIAS, caches
 from django.core.exceptions import ImproperlyConfigured, SynchronousOnlyOperation
 from django.http import HttpResponse, HttpResponseNotAllowed
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.utils.asyncio import async_unsafe
 from django.views.generic.base import View
 
@@ -25,7 +25,9 @@ class CacheTest(SimpleTestCase):
         self.assertIs(cache_1, cache_2)
 
 
-class DatabaseConnectionTest(SimpleTestCase):
+# Changed from SimpleTestCase to TestCase for MongoDB since
+# DatabaseFeatures.supports_transactions establishes a connection.
+class DatabaseConnectionTest(TestCase):
     """A database connection cannot be used in an async context."""
 
     async def test_get_async_connection(self):

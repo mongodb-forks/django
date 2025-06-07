@@ -1,5 +1,5 @@
 from django.db import DatabaseError, IntegrityError, models, transaction
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
 from .models import (
     Counter,
@@ -13,7 +13,9 @@ from .models import (
 )
 
 
-class ForceTests(TestCase):
+class ForceTests(TransactionTestCase):
+    available_apps = ["force_insert_update"]
+
     def test_force_update(self):
         c = Counter.objects.create(name="one", value=1)
 
