@@ -1340,7 +1340,7 @@ class ChangeListTests(TestCase):
             # Check only the first few characters of the pk since the UUID has
             # dashes.
             self.assertIn(
-                "{'$match': {'$expr': {'$in': ['$uuid', ('%s" % str(a.pk)[:8],
+                "{'$match': {'uuid': {'$in': ('%s" % str(a.pk)[:8],
                 context.captured_queries[4]["sql"],
             )
 
