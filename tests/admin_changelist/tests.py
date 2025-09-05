@@ -1339,10 +1339,17 @@ class ChangeListTests(TestCase):
             self.assertEqual(response.status_code, 200)
             # Check only the first few characters of the pk since the UUID has
             # dashes.
-            self.assertIn(
-                "{'$match': {'$expr': {'$in': ['$uuid', ('%s" % str(a.pk)[:8],
-                context.captured_queries[4]["sql"],
-            )
+            try:
+                self.assertIn(
+                    "{'$match': {'uuid': {'$in': ('%s" % str(a.pk)[:8],
+                    context.captured_queries[4]["sql"],
+                )
+            except AssertionError:
+                # pre https://github.com/mongodb/django-mongodb-backend/pull/373
+                self.assertIn(
+                    "{'$match': {'$expr': {'$in': ['$uuid', ('%s" % str(a.pk)[:8],
+                    context.captured_queries[4]["sql"],
+                )
 
     def test_list_editable_error_title(self):
         a = Swallow.objects.create(origin="Swallow A", load=4, speed=1)
