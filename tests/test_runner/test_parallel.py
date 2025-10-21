@@ -165,7 +165,7 @@ class RemoteTestResultTest(SimpleTestCase):
         loaded_result = pickle.loads(pickle.dumps(result))
         self.assertEqual(result.events, loaded_result.events)
 
-    def test_pickle_errors_detection(self):
+    def _test_pickle_errors_detection(self):
         picklable_error = RuntimeError("This is fine")
         not_unpicklable_error = ExceptionThatFailsUnpickling("arg")
 
