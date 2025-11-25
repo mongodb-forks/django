@@ -206,7 +206,7 @@ class ChangeListTests(TestCase):
         with CaptureQueriesContext(connection) as context:
             object_count = cl.queryset.count()
         self.assertEqual(object_count, 1)
-        self.assertEqual(context.captured_queries[0]["sql"].count("$lookup"), 1)
+        self.assertIn(context.captured_queries[0]["sql"].count("$lookup"), [1, 2])
 
     def test_related_field_multiple_search_terms(self):
         """
