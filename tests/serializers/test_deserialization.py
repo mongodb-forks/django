@@ -164,7 +164,8 @@ class TestDeserializer(SimpleTestCase):
             field_content = f"{nested_open}{leaf}{nested_close}"
             return f"""
                 <django-objects version="1.0">
-                   <object model="contenttypes.contenttype" pk="1">
+                   <object model="contenttypes.contenttype"
+                    pk="000000000000000000000001">
                       <field name="app_label">{field_content}</field>
                       <field name="model">m</field>
                    </object>
