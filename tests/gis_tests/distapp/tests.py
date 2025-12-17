@@ -66,6 +66,7 @@ class DistanceTest(TestCase):
         self.assertEqual(1, SouthTexasInterstate.objects.count())
 
     @skipUnlessGISLookup("dwithin")
+    @skipUnlessDBFeature("has_Transform_function")
     def test_dwithin(self):
         """
         Test the `dwithin` lookup type.
@@ -323,6 +324,7 @@ class DistanceTest(TestCase):
             ).exists()
 
     @skipUnlessGISLookup("dwithin")
+    @skipUnlessDBFeature("has_Transform_function")
     def test_dwithin_subquery(self):
         """dwithin lookup in a subquery using OuterRef as a parameter."""
         qs = CensusZipcode.objects.annotate(
