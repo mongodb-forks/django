@@ -714,6 +714,7 @@ class GeoLookupTest(TestCase):
             )
         )
 
+    @skipUnlessDBFeature("has_Union_function")
     def test_gis_lookups_with_complex_expressions(self):
         multiple_arg_lookups = {
             "dwithin",
