@@ -155,6 +155,9 @@ class CompositePrimaryKey(Field):
             ]
         return value
 
+    def serialize_to_python(self, serializer, obj):
+        return [serializer._value_from_field(obj, f) for f in self]
+
 
 CompositePrimaryKey.register_lookup(TupleExact)
 CompositePrimaryKey.register_lookup(TupleGreaterThan)

@@ -31,6 +31,7 @@ from django.utils.dateparse import (
     parse_time,
 )
 from django.utils.duration import duration_microseconds, duration_string
+from django.utils.encoding import is_protected_type
 from django.utils.functional import Promise, cached_property
 from django.utils.ipv6 import MAX_IPV6_ADDRESS_LENGTH, clean_ipv6_address
 from django.utils.text import capfirst
@@ -762,6 +763,25 @@ class Field(RegisterLookupMixin):
         Return the converted value. Subclasses should override this.
         """
         return value
+
+    def serialize_to_python(self, obj, serializer):
+        value = self.value_from_object(obj)
+        # Protected types (i.e., primitives like None, numbers, dates, and
+        # Decimals) are passed through as is. All other values are converted to
+        # string first.
+        return value if is_protected_type(value) else self.value_to_string(obj)
+
+    def deserialize_from_python(self, value):
+        return self.to_python(value)
+
+    def serialize_to_xml(self, obj, serializer, *, indent=None):
+        return self.value_to_string(obj)
+
+    def deserialize_from_xml(self, field_node):
+        from django.core.serializers.xml_serializer import getInnerText
+
+        value = getInnerText(field_node).strip()
+        return self.to_python(value)
 
     @cached_property
     def error_messages(self):

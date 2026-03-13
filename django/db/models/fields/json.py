@@ -123,6 +123,17 @@ class JSONField(CheckFieldDefaultMixin, Field):
             return transform
         return KeyTransformFactory(name)
 
+    def deserialize_from_xml(self, value):
+        value = super().deserialize_from_xml(value)
+        # Load value since JSONField.to_python() isn't defined to convert
+        # strings to Python values.
+        return json.loads(value, cls=self.decoder)
+
+    def serialize_to_xml(self, serializer, obj, *, indent=None):
+        value = super().serialize_to_xml(serializer, obj)
+        # Dump value since value_to_string() doesn't output strings.
+        return json.dumps(value, cls=self.encoder)
+
     def validate(self, value, model_instance):
         super().validate(value, model_instance)
         try:
