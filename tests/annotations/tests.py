@@ -732,7 +732,6 @@ class NonAggregateAnnotationTestCase(TestCase):
         """
         store = Store.objects.first()
         Employee.objects.create(
-            id=1,
             first_name="Max",
             manager=True,
             last_name="Paine",
@@ -741,7 +740,6 @@ class NonAggregateAnnotationTestCase(TestCase):
             salary=Decimal(50000.00),
         )
         Employee.objects.create(
-            id=2,
             first_name="Buffy",
             manager=False,
             last_name="Summers",
@@ -782,7 +780,6 @@ class NonAggregateAnnotationTestCase(TestCase):
     def test_column_field_ordering_with_deferred(self):
         store = Store.objects.first()
         Employee.objects.create(
-            id=1,
             first_name="Max",
             manager=True,
             last_name="Paine",
@@ -791,7 +788,6 @@ class NonAggregateAnnotationTestCase(TestCase):
             salary=Decimal(50000.00),
         )
         Employee.objects.create(
-            id=2,
             first_name="Buffy",
             manager=False,
             last_name="Summers",
