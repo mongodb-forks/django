@@ -58,9 +58,9 @@ class DeleteLockingTest(TransactionTestCase):
     def test_concurrent_delete(self):
         """Concurrent deletes don't collide and lock the database (#9479)."""
         with transaction.atomic():
-            Book.objects.create(id=1, pagecount=100)
-            Book.objects.create(id=2, pagecount=200)
-            Book.objects.create(id=3, pagecount=300)
+            Book.objects.create(pagecount=100)
+            Book.objects.create(pagecount=200)
+            Book.objects.create(pagecount=300)
 
         with transaction.atomic():
             # Start a transaction on the main connection.
