@@ -903,11 +903,11 @@ class FixtureLoadingTests(DumpDataAssertMixin, TestCase):
                 ["fixtures.visa"],
                 '[{"fields": {"permissions": [["add_user", "auth", "user"]],'
                 '"person": ["Stephane Grappelli"]},'
-                '"model": "fixtures.visa", "pk": 2},'
+                '"model": "fixtures.visa", "pk": "000000000000000000000002"},'
                 '{"fields": {"permissions": [], "person": ["Prince"]},'
-                '"model": "fixtures.visa", "pk": 3}]',
+                '"model": "fixtures.visa", "pk": "000000000000000000000003"}]',
                 natural_foreign_keys=True,
-                primary_keys="2,3",
+                primary_keys="000000000000000000000002,000000000000000000000003",
             )
 
     def test_compress_format_loading(self):
