@@ -148,7 +148,7 @@ class PrefetchRelatedTests(TestDataMixin, TestCase):
             [
                 list(b.first_time_authors.all())
                 for b in Book.objects.prefetch_related("first_time_authors").exclude(
-                    id=1000
+                    id="000000000000000000001000"
                 )
             ]
 
