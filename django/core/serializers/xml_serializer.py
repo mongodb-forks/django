@@ -264,7 +264,7 @@ class Deserializer(base.Deserializer):
 
         field_names = {f.name for f in Model._meta.get_fields()}
         # Deserialize each field.
-        for field_node in node.getElementsByTagName("field"):
+        for field_node in getChildElementsByTagName(node, "field"):
             # If the field is missing the name attribute, bail (are you
             # sensing a pattern here?)
             field_name = field_node.getAttribute("name")
@@ -308,7 +308,7 @@ class Deserializer(base.Deserializer):
                 else:
                     data[field.attname] = value
             else:
-                if field_node.getElementsByTagName("None"):
+                if getChildElementsByTagName(field_node, "None"):
                     value = None
                 else:
                     value = field.to_python(getInnerText(field_node).strip())
@@ -423,6 +423,29 @@ class Deserializer(base.Deserializer):
                 "<%s> node has invalid model identifier: '%s'"
                 % (node.nodeName, model_identifier)
             )
+
+
+def getChildElementsByTagName(node, tag_name):
+    """
+    Like Element.getElementsByTagName() but return only direct children.
+
+    Element.getElementsByTagName() searches all descendants (direct children,
+    children’s children, etc.). This prevents correct deserialization of
+    third-party embedded fields in places where only direct child elements
+    should be retrieved. For example:
+
+      <field name="author" type="EmbeddedModelField">
+        <object model="app.Model">
+          <field name="id" type="..."><None></None></field>
+
+    This method is used by the deserializer instead, except for related
+    fields which aren't supported by embedded fields.
+    """
+    return [
+        n
+        for n in node.childNodes
+        if n.nodeType == node.ELEMENT_NODE and n.tagName == tag_name
+    ]
 
 
 def getInnerText(node):
