@@ -183,6 +183,7 @@ class Serializer(base.Serializer):
             else:
 
                 def handle_m2m(value):
+                    self.indent(self.indent_level + 1)
                     self.xml.addQuickElement("object", attrs={"pk": str(value.pk)})
 
                 def queryset_iterator(obj, field):
