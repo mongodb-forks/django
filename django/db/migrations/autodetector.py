@@ -1530,6 +1530,16 @@ class MigrationAutodetector:
         for app_label, model_name, field_name in sorted(
             set(self.new_embedded_field_keys) - set(self.old_embedded_field_keys)
         ):
+            # If the embedded field was just added, then there's no need to
+            # add each subfield.
+            if "." in field_name:
+                parent_field_name = field_name.rsplit(".", 1)[0]
+                if (
+                    app_label,
+                    model_name,
+                    parent_field_name,
+                ) not in self.old_field_keys:
+                    continue
             self._generate_added_embedded_field(app_label, model_name, field_name)
 
     def _generate_added_embedded_field(self, app_label, model_name, field_name):
