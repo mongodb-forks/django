@@ -6,8 +6,8 @@ from enum import Enum
 from graphlib import TopologicalSorter
 from itertools import chain
 
-# from django_mongodb_backend.models import EMBEDDED
 from django_mongodb_backend.indexes import FieldColumn
+from django_mongodb_backend.models import EMBEDDED
 
 from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
@@ -268,8 +268,35 @@ class MigrationAutodetector:
             for field_name in self.to_state.models[app_label, model_name].fields
         }
 
-        def get_field_path(model_state, path):
-            pass
+        def get_old_embedded_paths(field, name_prefix=None, path_prefix=None):
+            if hasattr(field, "embedded_model"):
+                if isinstance(field.embedded_model, str):
+                    model_label = field.embedded_model
+                else:
+                    model_label = field.embedded_model._meta.label_lower
+
+                model_lookup = tuple(model_label.split("."))
+                embedded_model = self.from_state.models[
+                    app_label,
+                    self.renamed_models.get(model_lookup, model_lookup[1]),
+                ]
+
+                for subfield_name, subfield in embedded_model.fields.items():
+
+                    if name_prefix:
+                        name = f"{name_prefix}.{subfield.name}"
+                    else:
+                        name = f"{field.name}.{subfield.name}"
+
+                    subfield_column = subfield.get_attname_column()[1]
+                    if path_prefix:
+                        path = f"{path_prefix}.{subfield_column}"
+                    else:
+                        field_column = field.get_attname_column()[1]
+                        path = f"{field_column}.{subfield_column}"
+                    self.old_embedded_field_keys[(app_label, model_name, name)] = path
+                    # Check for nested embeds.
+                    get_old_embedded_paths(subfield, name, path)
 
         # New/old embedded field keys
         # (app_label, model_name, embedded field name path)
@@ -278,40 +305,48 @@ class MigrationAutodetector:
             for field_name, field in self.from_state.models[
                 app_label, self.renamed_models.get((app_label, model_name), model_name)
             ].fields.items():
-                if hasattr(field, "embedded_model"):
-                    if isinstance(field.embedded_model, str):
-                        model_label = field.embedded_model
-                    else:
-                        model_label = field.embedded_model._meta.label_lower
+                try:
+                    if (
+                        self.from_state.models[app_label, model_name].options.get(
+                            "db_table"
+                        )
+                        is EMBEDDED
+                    ):
+                        continue
+                except KeyError:
+                    continue
 
-                    model_lookup = tuple(model_label.split("."))
-                    embedded_model = self.from_state.models[
-                        app_label,
-                        self.renamed_models.get(model_lookup, model_lookup[1]),
-                    ]
-                    field_column = field.get_attname_column()[1]
-                    for subfield_name, subfield in embedded_model.fields.items():
-                        subfield_column = subfield.get_attname_column()[1]
-                        self.old_embedded_field_keys[
-                            (app_label, model_name, f"{field.name}.{subfield.name}")
-                        ] = f"{field_column}.{subfield_column}"
-                        # Check for nested embeds.
+                get_old_embedded_paths(field)
+
+        def get_new_embedded_paths(field, name_prefix=None, path_prefix=None):
+            if hasattr(field, "embedded_model"):
+                embedded_model = self.to_state.models[*field.embedded_model.split(".")]
+                field_column = field.get_attname_column()[1]
+                for subfield_name, subfield in embedded_model.fields.items():
+                    subfield_column = subfield.get_attname_column()[1]
+                    if name_prefix:
+                        name = f"{name_prefix}.{subfield.name}"
+                    else:
+                        name = f"{field.name}.{subfield.name}"
+                    if path_prefix:
+                        path = f"{path_prefix}.{subfield_column}"
+                    else:
+                        field_column = field.get_attname_column()[1]
+                        path = f"{field_column}.{subfield_column}"
+                    self.new_embedded_field_keys[(app_label, model_name, name)] = path
+                    get_new_embedded_paths(subfield, name, path)
 
         self.new_embedded_field_keys = {}
         for app_label, model_name in self.kept_model_keys:
             for field_name, field in self.to_state.models[
                 app_label, model_name
             ].fields.items():
-                if hasattr(field, "embedded_model"):
-                    embedded_model = self.to_state.models[
-                        *field.embedded_model.split(".")
-                    ]
-                    field_column = field.get_attname_column()[1]
-                    for subfield_name, subfield in embedded_model.fields.items():
-                        subfield_column = subfield.get_attname_column()[1]
-                        self.new_embedded_field_keys[
-                            (app_label, model_name, f"{field.name}.{subfield.name}")
-                        ] = f"{field_column}.{subfield_column}"
+                if (
+                    self.to_state.models[app_label, model_name].options.get("db_table")
+                    is EMBEDDED
+                ):
+                    continue
+                get_new_embedded_paths(field)
 
     def _generate_through_model_map(self):
         """Through model map generation."""
@@ -1538,7 +1573,11 @@ class MigrationAutodetector:
                     app_label,
                     model_name,
                     parent_field_name,
-                ) not in self.old_field_keys:
+                ) not in self.old_field_keys and (
+                    app_label,
+                    model_name,
+                    parent_field_name,
+                ) not in self.old_embedded_field_keys:
                     continue
             self._generate_added_embedded_field(app_label, model_name, field_name)
 
@@ -2242,7 +2281,8 @@ class MigrationAutodetector:
             # For EmbeddedModelFields, advance to the embedded model and
             # continue to loop, searching for the next field.
             if hasattr(field, "embedded_model"):
-                model = field.embedded_model
+                model_lookup = tuple(field.embedded_model.split("."))
+                model = self.to_state.models[model_lookup]
             # For PolymorphicEmbeddedModelFields, recurse into each embedded
             # model until the field is found.
             elif models := getattr(field, "embedded_models", None):
@@ -2262,6 +2302,5 @@ class MigrationAutodetector:
                     f"{base_model.__name__} has no field named '{field_name}'."
                 )
         # Add the final field.
-        model = self.to_state.models[tuple(model.split("."))]
         field = model.get_field(leaf)
         return field
