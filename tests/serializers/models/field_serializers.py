@@ -1,5 +1,3 @@
-import json
-
 from django.core.serializers import register_field_serializer
 from django.core.serializers.python import FieldSerializer as PythonFieldSerializer
 from django.core.serializers.xml_serializer import FieldSerializer as XMLFieldSerializer
@@ -43,7 +41,7 @@ class MyFieldThing(models.Model):
 
 
 # Example two: more complex serializers that handled nested model data.
-class EmbeddedModelField(models.JSONField):
+class EmbeddedModelField(models.Field):
     def __init__(self, embedded_model, *args, **kwargs):
         self.embedded_model = embedded_model
         super().__init__(*args, **kwargs)
@@ -54,7 +52,6 @@ class EmbeddedModelField(models.JSONField):
         return name, path, args, kwargs
 
     def from_db_value(self, value, expression, connection):
-        value = super().from_db_value(value, expression, connection)
         return self.to_python(value)
 
     def to_python(self, value):
@@ -81,7 +78,7 @@ class EmbeddedModelField(models.JSONField):
                 field.pre_save(embedded_instance, add), connection=connection
             )
             field_values[field.column] = value
-        return json.dumps(field_values)
+        return field_values
 
 
 @register_field_serializer("python", EmbeddedModelField)
