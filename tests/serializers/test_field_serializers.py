@@ -73,9 +73,9 @@ class XMLSerializerTests(SerializationTests, TestCase):
 <django-objects version="1.0">
   <object model="serializers.book">
     <field name="name" type="CharField">Othello</field>
-    <field name="author" type="JSONField">
+    <field name="author" type="EmbeddedModelField">
       <object model="serializers.book">
-        <field name="id" type="BigAutoField"><None></None></field>
+        <field name="id" type="ObjectIdAutoField"><None></None></field>
         <field name="name" type="CharField">Shakespeare</field>
       </object></field>
   </object>
