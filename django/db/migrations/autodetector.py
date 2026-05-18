@@ -155,17 +155,13 @@ class MigrationAutodetector:
 
         # Prepare some old/new state and model lists, separating
         # proxy models and ignoring unmigrated apps.
-        self.old_embedded_keys = set()
         self.old_model_keys = set()
         self.old_proxy_keys = set()
         self.old_unmanaged_keys = set()
-        self.new_embedded_keys = set()
         self.new_model_keys = set()
         self.new_proxy_keys = set()
         self.new_unmanaged_keys = set()
         for (app_label, model_name), model_state in self.from_state.models.items():
-            # if model_state.options.get("db_table") is EMBEDDED:
-            #     self.old_embedded_keys.add((app_label, model_name))
             if not model_state.options.get("managed", True):
                 self.old_unmanaged_keys.add((app_label, model_name))
             elif app_label not in self.from_state.real_apps:
@@ -175,8 +171,6 @@ class MigrationAutodetector:
                     self.old_model_keys.add((app_label, model_name))
 
         for (app_label, model_name), model_state in self.to_state.models.items():
-            # if model_state.options.get("db_table") is EMBEDDED:
-            #     self.new_embedded_keys.add((app_label, model_name))
             if not model_state.options.get("managed", True):
                 self.new_unmanaged_keys.add((app_label, model_name))
             elif app_label not in self.from_state.real_apps or (
@@ -274,20 +268,16 @@ class MigrationAutodetector:
                     model_label = field.embedded_model
                 else:
                     model_label = field.embedded_model._meta.label_lower
-
                 model_lookup = tuple(model_label.split("."))
                 embedded_model = self.from_state.models[
                     app_label,
                     self.renamed_models.get(model_lookup, model_lookup[1]),
                 ]
-
                 for subfield_name, subfield in embedded_model.fields.items():
-
                     if name_prefix:
                         name = f"{name_prefix}.{subfield.name}"
                     else:
                         name = f"{field.name}.{subfield.name}"
-
                     subfield_column = subfield.get_attname_column()[1]
                     if path_prefix:
                         path = f"{path_prefix}.{subfield_column}"
