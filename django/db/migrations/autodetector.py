@@ -232,6 +232,7 @@ class MigrationAutodetector:
 
         # Generate embedded field operations.
         self.generate_added_embedded_fields()
+        self.generate_altered_embedded_fields()
 
         self._sort_migrations()
         self._build_migration_list(graph)
@@ -1654,6 +1655,54 @@ class MigrationAutodetector:
                 *self._get_generated_field_dependencies_for_removed_field(
                     app_label, model_name, field_name
                 ),
+            ],
+        )
+
+    def generate_altered_embedded_fields(self):
+        """
+        Make AlterEmbeddedField operations when an embedded column path
+        changes.
+        """
+        common = set(self.old_embedded_field_keys) & set(self.new_embedded_field_keys)
+        for app_label, model_name, field_name in sorted(common):
+            old_path = self.old_embedded_field_keys[app_label, model_name, field_name]
+            new_path = self.new_embedded_field_keys[app_label, model_name, field_name]
+            if old_path != new_path:
+                self._generate_altered_embedded_field(app_label, model_name, field_name)
+
+    def _generate_altered_embedded_field(self, app_label, model_name, field_name):
+        from django_mongodb_backend.db.migrations.operations import AlterEmbeddedField
+
+        field = self.get_field(self.to_state.models[app_label, model_name], field_name)
+        # Navigate the path to locate the leaf embedded model for the ALTER
+        # dependency.
+        *parents, leaf_field_name = field_name.split(".")
+        current_app_label = app_label
+        current_model_name = model_name
+        for part in parents:
+            parent_field = self.to_state.models[
+                current_app_label, current_model_name
+            ].get_field(part)
+            if hasattr(parent_field, "embedded_model"):
+                label_parts = parent_field.embedded_model.split(".")
+                if len(label_parts) == 2:
+                    current_app_label, current_model_name = label_parts
+                else:
+                    current_model_name = label_parts[0]
+        self.add_operation(
+            app_label,
+            AlterEmbeddedField(
+                model_name=model_name,
+                name=field_name,
+                field=field,
+            ),
+            dependencies=[
+                OperationDependency(
+                    current_app_label,
+                    current_model_name,
+                    leaf_field_name,
+                    OperationDependency.Type.ALTER,
+                )
             ],
         )
 
