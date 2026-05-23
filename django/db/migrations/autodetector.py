@@ -35,6 +35,7 @@ class OperationDependency(
         REMOVE_ORDER_WRT = 3
         ALTER_FOO_TOGETHER = 4
         REMOVE_INDEX_OR_CONSTRAINT = 5
+        RENAME = 6
 
     @cached_property
     def model_name_lower(self):
@@ -220,6 +221,7 @@ class MigrationAutodetector:
         self.generate_removed_altered_unique_together()
         # Generate field operations.
         self.generate_removed_fields()
+        self.generate_renamed_embedded_fields()
         self.generate_removed_embedded_fields()
         self.generate_added_fields()
         self.generate_altered_fields()
@@ -627,6 +629,16 @@ class MigrationAutodetector:
                     (operations.RemoveIndex, operations.RemoveConstraint),
                 )
                 and operation.model_name_lower == dependency.model_name_lower
+            )
+        # Field being renamed.
+        elif (
+            dependency.field_name is not None
+            and dependency.type == OperationDependency.Type.RENAME
+        ):
+            return (
+                isinstance(operation, operations.RenameField)
+                and operation.model_name_lower == dependency.model_name_lower
+                and operation.new_name_lower == dependency.field_name_lower
             )
         # Unknown dependency. Raise an error.
         else:
@@ -1612,6 +1624,88 @@ class MigrationAutodetector:
                 preserve_default=preserve_default,
             ),
             dependencies=dependencies,
+        )
+
+    def generate_renamed_embedded_fields(self):
+        """
+        Make RenameEmbeddedField operations for renamed embedded leaf fields.
+        """
+        # Build inverse of renamed_fields: (app_label, model_name, old_name)
+        # -> new_name.
+        renamed_field_inverse = {
+            (al, mn, old): new for (al, mn, new), old in self.renamed_fields.items()
+        }
+        for app_label, model_name, old_attr_path in sorted(
+            set(self.old_embedded_field_keys) - set(self.new_embedded_field_keys)
+        ):
+            *parents, leaf_field_name = old_attr_path.split(".")
+            # Navigate the from_state to find the model containing the leaf
+            # field.
+            current_app_label = app_label
+            current_model_name = model_name
+            for part in parents:
+                field = self.from_state.models[
+                    current_app_label, current_model_name
+                ].get_field(part)
+                if hasattr(field, "embedded_model"):
+                    label_parts = field.embedded_model.split(".")
+                    if len(label_parts) == 2:
+                        current_app_label, current_model_name = label_parts
+                    else:
+                        current_model_name = label_parts[0]
+            # Check if the leaf field was renamed.
+            new_leaf_field_name = renamed_field_inverse.get(
+                (current_app_label, current_model_name, leaf_field_name)
+            )
+            if new_leaf_field_name is None:
+                continue
+            new_attr_path = ".".join([*parents, new_leaf_field_name])
+            if (
+                app_label,
+                model_name,
+                new_attr_path,
+            ) not in self.new_embedded_field_keys:
+                continue
+            self._generate_renamed_embedded_field(
+                app_label,
+                model_name,
+                old_attr_path,
+                new_attr_path,
+                current_app_label,
+                current_model_name,
+                new_leaf_field_name,
+            )
+            # Remove from both dicts so remove/add generators skip these paths.
+            del self.old_embedded_field_keys[app_label, model_name, old_attr_path]
+            del self.new_embedded_field_keys[app_label, model_name, new_attr_path]
+
+    def _generate_renamed_embedded_field(
+        self,
+        app_label,
+        model_name,
+        old_attr_path,
+        new_attr_path,
+        leaf_app_label,
+        leaf_model_name,
+        leaf_new_field_name,
+    ):
+        from django_mongodb_backend.db.migrations.operations import RenameEmbeddedField
+
+        self.add_operation(
+            app_label,
+            RenameEmbeddedField(
+                model_name=model_name,
+                old_name=old_attr_path,
+                new_name=new_attr_path,
+            ),
+            dependencies=[
+                OperationDependency(
+                    leaf_app_label,
+                    leaf_model_name,
+                    leaf_new_field_name,
+                    OperationDependency.Type.RENAME,
+                )
+            ],
         )
 
     def generate_removed_embedded_fields(self):
