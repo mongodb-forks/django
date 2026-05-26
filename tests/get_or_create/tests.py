@@ -237,9 +237,12 @@ class GetOrCreateTestsWithManualPKs(TestCase):
         """
         Tag.objects.create(text="foo")
         with self.assertRaises(DatabaseError):
-            # pk 123456789 doesn't exist, so the tag object will be created.
+            # The tag object will be created since the pk doesn't exist.
             # Saving triggers a unique constraint violation on 'text'.
-            Tag.objects.get_or_create(pk=123456789, defaults={"text": "foo"})
+            Tag.objects.get_or_create(
+                pk=connection.ops.get_nonexistent_pk(123456789),
+                defaults={"text": "foo"},
+            )
         # Tag objects can be created after the error.
         Tag.objects.create(text="bar")
 
