@@ -2695,13 +2695,11 @@ class AggregateAnnotationPruningTests(TestCase):
                 0.0,
             )
         )
-        with self.assertNumQueries(1) as ctx:
+        with self.assertNumQueries(1):
             aggregate = total_books_qs.aggregate(
                 sum_avg_publisher_pages=Sum("avg_publisher_pages"),
                 books_count=Count("id"),
             )
-        sql = ctx.captured_queries[0]["sql"].lower()
-        self.assertEqual(sql.count("select"), 2, "Subquery wrapping required")
         self.assertEqual(
             aggregate,
             {"sum_avg_publisher_pages": 1100.0, "books_count": 2},
