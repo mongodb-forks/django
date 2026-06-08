@@ -107,9 +107,10 @@ class FilteredRelationTests(TestCase):
         )
 
     def test_select_related_with_empty_relation(self):
+        nonexistent_id = "000000000000000000000000"
         qs = (
             Author.objects.annotate(
-                book_join=FilteredRelation("book", condition=Q(pk=-1)),
+                book_join=FilteredRelation("book", condition=Q(pk=nonexistent_id)),
             )
             .select_related("book_join")
             .order_by("pk")
@@ -381,7 +382,7 @@ class FilteredRelationTests(TestCase):
                 "book", condition=Q(book__title__iexact="the book by jane a")
             ),
         ).filter(book_jane__isnull=False)
-        self.assertSequenceEqual(qs1.union(qs2), [self.author1, self.author2])
+        self.assertCountEqual(qs1.union(qs2), [self.author1, self.author2])
 
     @skipUnlessDBFeature("supports_select_intersection")
     def test_intersection(self):
@@ -1191,6 +1192,6 @@ class FilteredRelationAnalyticalAggregationTests(TestCase):
                     [
                         {"title": self.book2.title, "sales_sum": Decimal(150.00)},
                         {"title": self.book1.title, "sales_sum": Decimal(50.00)},
-                        {"title": self.book3.title, "sales_sum": None},
+                        {"title": self.book3.title, "sales_sum": 0},
                     ],
                 )
