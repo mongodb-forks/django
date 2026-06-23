@@ -1,0 +1,127 @@
+name: Sync with upstream Django
+
+# Rebases each mongodb-X.Y.x branch onto its corresponding upstream Django
+# branch, then opens a PR for review.
+#
+# Runs every Monday at 09:00 UTC. Can also be triggered manually with an
+# optional dry-run mode that rebases but skips pushing and PR creation.
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — rebase but do not push or open PRs'
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    name: ${{ matrix.local_branch }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - local_branch: mongodb-6.1.x
+            upstream_branch: stable/6.1.x
+          - local_branch: mongodb-6.0.x
+            upstream_branch: stable/6.0.x
+          - local_branch: mongodb-5.2.x
+            upstream_branch: stable/5.2.x
+          - local_branch: main
+            upstream_branch: main
+
+    steps:
+      - name: Configure git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout ${{ matrix.local_branch }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.local_branch }}
+          fetch-depth: 0
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream https://github.com/django/django.git
+          git fetch upstream ${{ matrix.upstream_branch }}
+
+      - name: Rebase onto upstream/${{ matrix.upstream_branch }}
+        id: rebase
+        run: |
+          BEFORE=$(git rev-parse HEAD)
+
+          if git rebase upstream/${{ matrix.upstream_branch }}; then
+            AFTER=$(git rev-parse HEAD)
+            if [ "$BEFORE" = "$AFTER" ]; then
+              echo "status=unchanged" >> "$GITHUB_OUTPUT"
+              echo "No new commits from upstream — nothing to do."
+            else
+              COUNT=$(git rev-list --count "${BEFORE}..HEAD")
+              echo "status=updated"   >> "$GITHUB_OUTPUT"
+              echo "count=${COUNT}"   >> "$GITHUB_OUTPUT"
+              echo "Rebased ${COUNT} upstream commit(s) onto ${{ matrix.local_branch }}."
+            fi
+          else
+            git rebase --abort || true
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+            echo "Rebase failed — conflict detected."
+          fi
+
+      - name: Push sync branch
+        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != 'true'
+        run: git push origin HEAD:refs/heads/sync/${{ matrix.local_branch }} --force
+
+      - name: Open or update PR
+        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COUNT: ${{ steps.rebase.outputs.count }}
+        run: |
+          SYNC_BRANCH="sync/${{ matrix.local_branch }}"
+
+          EXISTING=$(gh pr list \
+            --head "${SYNC_BRANCH}" \
+            --base "${{ matrix.local_branch }}" \
+            --json number --jq '.[0].number')
+
+          if [ -n "$EXISTING" ]; then
+            echo "PR #${EXISTING} already open — branch updated in place."
+          else
+            printf 'Automated weekly sync.\n\nRebases `%s` onto `upstream/%s`, picking up **%s** new upstream commit(s).\n\nAfter reviewing, merge with **Rebase and merge** to keep a linear history.\n' \
+              "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}" "${COUNT}" \
+              > /tmp/pr-body.md
+            gh pr create \
+              --head "${SYNC_BRANCH}" \
+              --base "${{ matrix.local_branch }}" \
+              --title "sync: rebase ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}" \
+              --body-file /tmp/pr-body.md
+          fi
+
+      - name: Open conflict issue
+        if: steps.rebase.outputs.status == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
+
+          EXISTING=$(gh issue list \
+            --state open \
+            --search "${TITLE}" \
+            --json number --jq '.[0].number')
+
+          if [ -n "$EXISTING" ]; then
+            echo "Conflict issue #${EXISTING} already open."
+          else
+            gh issue create \
+              --title "${TITLE}" \
+              --body "The automated sync workflow failed to rebase \`${{ matrix.local_branch }}\` onto \`upstream/${{ matrix.upstream_branch }}\` due to merge conflicts. Manual resolution required. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
