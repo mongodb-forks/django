@@ -3,12 +3,13 @@ name: Sync with upstream Django
 # Rebases each mongodb-X.Y.x branch onto its corresponding upstream Django
 # branch, then opens a PR for review.
 #
-# Runs every Monday at 09:00 UTC. Can also be triggered manually with an
-# optional dry-run mode that rebases but skips pushing and PR creation.
+# Runs on the first of every month at 09:00 UTC. Can also be triggered
+# manually with an optional dry-run mode that rebases but skips pushing
+# and PR creation.
 
 on:
   schedule:
-    - cron: '0 9 * * 1'  # Every Monday 09:00 UTC
+    - cron: '0 9 1 * *'  # First of every month 09:00 UTC
   workflow_dispatch:
     inputs:
       dry_run:
