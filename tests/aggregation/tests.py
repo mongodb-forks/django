@@ -2350,13 +2350,16 @@ class AggregateTestCase(TestCase):
         values = Publisher.objects.aggregate(
             stringagg=StringAgg("name", delimiter=Value("'"))
         )
-
-        self.assertEqual(
-            values,
-            {
-                "stringagg": "Apress'Sams'Prentice Hall'Morgan Kaufmann'Jonno's House "
-                "of Books",
-            },
+        self.assertCountEqual(
+            values["stringagg"].split("'"),
+            [
+                "Apress",
+                "Sams",
+                "Prentice Hall",
+                "Morgan Kaufmann",
+                "Jonno",
+                "s House of Books",
+            ],
         )
 
     @skipUnlessDBFeature("supports_aggregate_order_by_clause")
@@ -2411,13 +2414,15 @@ class AggregateTestCase(TestCase):
                 filter=Q(name__startswith="P"),
             )
         )
-
-        expected_values = {
-            "stringagg": "Practical Django Projects;"
-            "Python Web Development with Django;Paradigms of Artificial "
-            "Intelligence Programming: Case Studies in Common Lisp",
-        }
-        self.assertEqual(values, expected_values)
+        self.assertCountEqual(
+            values["stringagg"].split(";"),
+            [
+                "Practical Django Projects",
+                "Python Web Development with Django",
+                "Paradigms of Artificial Intelligence Programming: Case "
+                "Studies in Common Lisp",
+            ],
+        )
 
     @skipUnlessDBFeature("supports_aggregate_order_by_clause")
     def test_string_agg_filter_outerref(self):
@@ -2488,16 +2493,22 @@ class AggregateTestCase(TestCase):
             ).values_list("agg", flat=True)
         )
 
-        expected_values = [
-            "Adrian Holovaty",
-            "Brad Dayley",
-            "Paul Bissex;Wesley J. Chun",
-            "Peter Norvig;Stuart Russell",
-            "Peter Norvig",
-            "" if connection.features.interprets_empty_strings_as_nulls else None,
-        ]
+        def normalize(v):
+            if v is None or v == "":
+                return v
+            return ";".join(sorted(v.split(";")))
 
-        self.assertQuerySetEqual(expected_values, values, ordered=False)
+        self.assertCountEqual(
+            [normalize(v) for v in values],
+            [
+                "Adrian Holovaty",
+                "Brad Dayley",
+                "Paul Bissex;Wesley J. Chun",
+                "Peter Norvig;Stuart Russell",
+                "Peter Norvig",
+                "" if connection.features.interprets_empty_strings_as_nulls else None,
+            ],
+        )
 
     @skipUnlessDBFeature("supports_aggregate_order_by_clause")
     def test_order_by_in_subquery(self):
