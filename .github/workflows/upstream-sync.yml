@@ -34,8 +34,6 @@ jobs:
             upstream_branch: stable/6.0.x
           - local_branch: mongodb-5.2.x
             upstream_branch: stable/5.2.x
-          - local_branch: main
-            upstream_branch: main
 
     steps:
       - name: Configure git
