@@ -41,10 +41,9 @@ from django.db.models import (
 )
 from django.db.models.expressions import Func, RawSQL
 from django.db.models.fields.json import KeyTextTransform
-from django.db.models.functions import (
+from django.db.models.functions import (  # Concat,
     Cast,
     Coalesce,
-    Concat,
     Greatest,
     Least,
     Lower,
@@ -2535,14 +2534,16 @@ class AggregateTestCase(TestCase):
             (F("original_opening"), "Mamma and Pappa's Books;Amazon.com;Books.com"),
             ("original_opening", "Mamma and Pappa's Books;Amazon.com;Books.com"),
             ("-original_opening", "Books.com;Amazon.com;Mamma and Pappa's Books"),
-            (
-                Concat("original_opening", Value("@")),
-                "Mamma and Pappa's Books;Amazon.com;Books.com",
-            ),
-            (
-                Concat("original_opening", Value("@")).desc(),
-                "Books.com;Amazon.com;Mamma and Pappa's Books",
-            ),
+            # MongoDB: $concat supports only strings (original_opening is
+            # datetime).
+            # (
+            #     Concat("original_opening", Value("@")),
+            #    "Mamma and Pappa's Books;Amazon.com;Books.com",
+            # ),
+            # (
+            #    Concat("original_opening", Value("@")).desc(),
+            #    "Books.com;Amazon.com;Mamma and Pappa's Books",
+            # ),
         )
         for order_by, expected_output in order_by_test_cases:
             with self.subTest(order_by=order_by, expected_output=expected_output):
