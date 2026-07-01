@@ -1192,6 +1192,6 @@ class FilteredRelationAnalyticalAggregationTests(TestCase):
                     [
                         {"title": self.book2.title, "sales_sum": Decimal(150.00)},
                         {"title": self.book1.title, "sales_sum": Decimal(50.00)},
-                        {"title": self.book3.title, "sales_sum": 0},
+                        {"title": self.book3.title, "sales_sum": None},
                     ],
                 )
