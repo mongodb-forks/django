@@ -1809,7 +1809,7 @@ class WindowFunctionTests(TestCase):
         self.assertQuerySetEqual(
             qs,
             [
-                ("Miller", 100000, "Management", datetime.date(2005, 6, 1), 0),
+                ("Miller", 100000, "Management", datetime.date(2005, 6, 1), None),
                 ("Johnson", 80000, "Management", datetime.date(2005, 7, 1), 100000),
                 ("Jones", 45000, "Accounting", datetime.date(2005, 11, 1), 180000),
                 ("Smith", 55000, "Sales", datetime.date(2007, 6, 1), 125000),
@@ -1858,7 +1858,7 @@ class WindowFunctionTests(TestCase):
                 ("Wilkinson", 60000, "IT", datetime.date(2011, 3, 1), 90000),
                 ("Johnson", 40000, "Marketing", datetime.date(2012, 3, 1), 84000),
                 ("Adams", 50000, "Accounting", datetime.date(2013, 7, 1), 34000),
-                ("Moore", 34000, "IT", datetime.date(2013, 8, 1), 0),
+                ("Moore", 34000, "IT", datetime.date(2013, 8, 1), None),
             ],
             transform=lambda row: (
                 row.name,
