@@ -1,40 +1,74 @@
 name: Sync with upstream Django
 
-# Rebases each mongodb-X.Y.x branch onto its corresponding upstream Django
-# branch, then opens a PR for review.
+# Keeps each mongodb-X.Y.x fork branch in sync with its upstream Django
+# counterpart. Reimplements the `dbx sync django --all-branches` flow natively
+# (no external CLI): for each mapped branch it rebases onto upstream, and then
+# either reports the incoming commits (dry run) or force-pushes the rebased
+# branch and re-triggers the pinned downstream backend CI.
 #
-# Runs on the first of every month at 09:00 UTC. Can also be triggered
-# manually with an optional dry-run mode that rebases but skips pushing
-# and PR creation.
+# WHY FORCE-PUSH INSTEAD OF A PR:
+#   A fork branch is maintained by rebasing onto upstream, which rewrites
+#   history. You cannot open a clean pull request from a rebased branch back
+#   onto itself — "rebase and merge" would duplicate the fork's own commits and
+#   produce a confusing non-linear history. The correct way to advance a rebased
+#   fork branch is a direct force-push. This workflow does that, then repairs the
+#   one thing a force-push breaks: downstream backend CI (GitHub Actions runs and
+#   Evergreen patches) pins the fork branch at a ref, so a rebased branch does not
+#   re-run on its own — we re-trigger it explicitly.
+#
+# SAFETY MODEL:
+#   `dry_run` defaults to true. The weekly cron therefore only *reports* incoming
+#   upstream commits by opening/updating an issue — it never rewrites a branch
+#   unattended. Actually rebasing + force-pushing a branch requires a manual
+#   dispatch with dry_run=false, keeping a human in the loop. This is deliberate:
+#   on stable branches an upstream rebase can pull in tests incompatible with
+#   MongoDB and redden CI across every open backend PR, so the decision to sync
+#   should be a person's, not a cron's.
 
 on:
   schedule:
-    - cron: '0 9 1 * *'  # First of every month 09:00 UTC
+    - cron: '0 9 * * 1'   # Every Monday 09:00 UTC (report-only via dry_run default)
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run — rebase but do not push or open PRs'
+        description: 'Dry run — rebase and report incoming commits, but do not force-push or re-run CI'
         type: boolean
-        default: false
+        default: true
+
+# Faithful to config.toml [repo.groups.django]: mongodb-6.2.x tracks upstream
+# main until Django cuts stable/6.2.x; 5.0.x / 5.1.x are omitted (EOL, upstream
+# stable branches deleted).
+env:
+  UPSTREAM_URL: https://github.com/django/django.git
+  BACKEND_REPO: mongodb/django-mongodb-backend
 
 jobs:
   sync:
     name: ${{ matrix.local_branch }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
+      contents: write        # force-push rebased branch
+      issues: write          # open conflict / report issues
+      actions: write         # re-run / dispatch downstream workflow runs
+      pull-requests: write   # comment 'evergreen retry' on backend PRs
     strategy:
       fail-fast: false
       matrix:
         include:
+          - local_branch: mongodb-6.2.x
+            upstream_branch: main
+            # ci_rerun target: re-run backend PR #535 + retry its Evergreen patch
+            ci_rerun: '{"kind":"evergreen","pr":535}'
           - local_branch: mongodb-6.1.x
             upstream_branch: stable/6.1.x
+            ci_rerun: '{"kind":"evergreen","pr":422}'
           - local_branch: mongodb-6.0.x
             upstream_branch: stable/6.0.x
+            # ci_rerun target: dispatch backend test-python* workflows on `main`
+            ci_rerun: '{"kind":"ref","ref":"main"}'
           - local_branch: mongodb-5.2.x
             upstream_branch: stable/5.2.x
+            ci_rerun: '{"kind":"evergreen","pr":562}'
 
     steps:
       - name: Configure git
@@ -47,80 +81,137 @@ jobs:
         with:
           ref: ${{ matrix.local_branch }}
           fetch-depth: 0
+          # Persist a token so the later force-push is authenticated.
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Add upstream remote and fetch
+      - name: Fetch upstream
         run: |
-          git remote add upstream https://github.com/django/django.git
-          git fetch upstream ${{ matrix.upstream_branch }}
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch --no-tags upstream "${{ matrix.upstream_branch }}"
 
       - name: Rebase onto upstream/${{ matrix.upstream_branch }}
         id: rebase
         run: |
+          set -euo pipefail
           BEFORE=$(git rev-parse HEAD)
+          UPSTREAM_REF="upstream/${{ matrix.upstream_branch }}"
 
-          if git rebase upstream/${{ matrix.upstream_branch }}; then
+          if git rebase "$UPSTREAM_REF"; then
             AFTER=$(git rev-parse HEAD)
             if [ "$BEFORE" = "$AFTER" ]; then
               echo "status=unchanged" >> "$GITHUB_OUTPUT"
-              echo "No new commits from upstream — nothing to do."
+              echo "Already up to date with $UPSTREAM_REF."
             else
-              COUNT=$(git rev-list --count "${BEFORE}..HEAD")
-              echo "status=updated"   >> "$GITHUB_OUTPUT"
-              echo "count=${COUNT}"   >> "$GITHUB_OUTPUT"
-              echo "Rebased ${COUNT} upstream commit(s) onto ${{ matrix.local_branch }}."
+              # Commits present upstream but not previously on the fork branch —
+              # i.e. what this sync pulls in. Compared against the pre-rebase tip.
+              COUNT=$(git rev-list --count "${BEFORE}..${UPSTREAM_REF}")
+              echo "status=updated" >> "$GITHUB_OUTPUT"
+              echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+              {
+                echo "commits<<EOF"
+                git log --no-merges --pretty='- %h %s' "${BEFORE}..${UPSTREAM_REF}"
+                echo "EOF"
+              } >> "$GITHUB_OUTPUT"
+              echo "Rebased; ${COUNT} new upstream commit(s)."
             fi
           else
             git rebase --abort || true
             echo "status=conflict" >> "$GITHUB_OUTPUT"
-            echo "Rebase failed — conflict detected."
+            echo "Rebase hit conflicts."
           fi
 
-      - name: Push sync branch
-        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != 'true'
-        run: git push origin HEAD:refs/heads/sync/${{ matrix.local_branch }} --force
-
-      - name: Open or update PR
-        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != 'true'
+      # ---- DRY RUN: report incoming commits, change nothing --------------------
+      - name: Report incoming commits (dry run)
+        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COUNT: ${{ steps.rebase.outputs.count }}
+          COMMITS: ${{ steps.rebase.outputs.commits }}
         run: |
-          SYNC_BRANCH="sync/${{ matrix.local_branch }}"
-
-          EXISTING=$(gh pr list \
-            --head "${SYNC_BRANCH}" \
-            --base "${{ matrix.local_branch }}" \
-            --json number --jq '.[0].number')
-
+          set -euo pipefail
+          TITLE="Upstream sync available: ${{ matrix.local_branch }} ← upstream/${{ matrix.upstream_branch }}"
+          BODY=$(printf '%s new upstream commit(s) are ready to rebase into `%s`.\n\n%s\n\nRun this workflow manually with **dry_run = false** to rebase, force-push, and re-trigger backend CI.' \
+            "$COUNT" "${{ matrix.local_branch }}" "$COMMITS")
+          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number' || true)
           if [ -n "$EXISTING" ]; then
-            echo "PR #${EXISTING} already open — branch updated in place."
+            gh issue comment "$EXISTING" --body "$BODY"
+            echo "Updated existing report issue #$EXISTING."
           else
-            printf 'Automated weekly sync.\n\nRebases `%s` onto `upstream/%s`, picking up **%s** new upstream commit(s).\n\nAfter reviewing, merge with **Rebase and merge** to keep a linear history.\n' \
-              "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}" "${COUNT}" \
-              > /tmp/pr-body.md
-            gh pr create \
-              --head "${SYNC_BRANCH}" \
-              --base "${{ matrix.local_branch }}" \
-              --title "sync: rebase ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}" \
-              --body-file /tmp/pr-body.md
+            gh issue create --title "$TITLE" --body "$BODY"
           fi
 
+      # ---- REAL SYNC: force-push the rebased branch ----------------------------
+      - name: Force-push rebased ${{ matrix.local_branch }}
+        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
+        run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
+
+      - name: Re-trigger downstream backend CI
+        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_RERUN: ${{ matrix.ci_rerun }}
+        run: |
+          set -euo pipefail
+          KIND=$(jq -r '.kind' <<<"$CI_RERUN")
+          echo "Downstream CI re-run for ${{ matrix.local_branch }} → $BACKEND_REPO (kind=$KIND)"
+
+          rerun_pr_runs() {   # re-run the Actions runs on an open PR's head commit
+            local pr="$1"
+            local sha
+            sha=$(gh pr view "$pr" --repo "$BACKEND_REPO" --json headRefOid --jq .headRefOid)
+            if [ -z "$sha" ]; then echo "  PR #$pr: no head commit"; return; fi
+            local ids
+            ids=$(gh api "repos/$BACKEND_REPO/actions/runs?head_sha=$sha&per_page=100" \
+              --jq '.workflow_runs[].id')
+            if [ -z "$ids" ]; then echo "  PR #$pr: no runs on $sha"; return; fi
+            for id in $ids; do
+              gh api -X POST "repos/$BACKEND_REPO/actions/runs/$id/rerun" >/dev/null \
+                && echo "  PR #$pr: re-queued run $id" \
+                || echo "  PR #$pr: run $id not re-queued (already running / perms)"
+            done
+          }
+
+          retry_evergreen() { # Evergreen pins the fork ref, so nudge it explicitly
+            local pr="$1"
+            gh pr comment "$pr" --repo "$BACKEND_REPO" --body "evergreen retry" \
+              && echo "  PR #$pr: commented 'evergreen retry'"
+          }
+
+          dispatch_ref() {    # dispatch test-python* workflows on a backend ref
+            local ref="$1"
+            local paths
+            paths=$(gh api "repos/$BACKEND_REPO/actions/workflows" \
+              --jq '.workflows[] | select(.path | test("workflows/test-python")) | .path')
+            if [ -z "$paths" ]; then echo "  no test-python* workflows"; return; fi
+            for p in $paths; do
+              name=$(basename "$p")
+              gh workflow run "$name" --repo "$BACKEND_REPO" --ref "$ref" \
+                && echo "  dispatched $name @ $ref" \
+                || echo "  $name: dispatch failed (no workflow_dispatch trigger / perms)"
+            done
+          }
+
+          case "$KIND" in
+            pr)        rerun_pr_runs "$(jq -r '.pr' <<<"$CI_RERUN")" ;;
+            evergreen) pr=$(jq -r '.pr' <<<"$CI_RERUN"); rerun_pr_runs "$pr"; retry_evergreen "$pr" ;;
+            ref)       dispatch_ref "$(jq -r '.ref' <<<"$CI_RERUN")" ;;
+            *)         echo "  unknown ci_rerun kind: $KIND" ;;
+          esac
+
+      # ---- CONFLICT: open an issue for manual resolution -----------------------
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           TITLE="Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
-
-          EXISTING=$(gh issue list \
-            --state open \
-            --search "${TITLE}" \
-            --json number --jq '.[0].number')
-
+          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number' || true)
           if [ -n "$EXISTING" ]; then
-            echo "Conflict issue #${EXISTING} already open."
+            echo "Conflict issue #$EXISTING already open."
           else
-            gh issue create \
-              --title "${TITLE}" \
-              --body "The automated sync workflow failed to rebase \`${{ matrix.local_branch }}\` onto \`upstream/${{ matrix.upstream_branch }}\` due to merge conflicts. Manual resolution required. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            gh issue create --title "$TITLE" --body \
+              "Automated sync could not rebase \`${{ matrix.local_branch }}\` onto \`upstream/${{ matrix.upstream_branch }}\` — manual resolution required.
+
+          Run log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           fi
