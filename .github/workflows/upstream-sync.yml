@@ -23,6 +23,11 @@ jobs:
   sync:
     name: ${{ matrix.local_branch }}
     runs-on: ubuntu-latest
+    # Serialize per branch so a cron and a manual run can't rebase/force-push the
+    # same branch at once. Don't cancel: an in-progress force-push must finish.
+    concurrency:
+      group: upstream-sync-${{ matrix.local_branch }}
+      cancel-in-progress: false
     # Auth is via the secure-checkout App token, not GITHUB_TOKEN.
     permissions:
       contents: read
@@ -80,7 +85,8 @@ jobs:
               echo "status=unchanged" >> "$GITHUB_OUTPUT"
               echo "Already up to date with $UPSTREAM_REF."
             else
-              COUNT=$(git rev-list --count "${BEFORE}..${UPSTREAM_REF}")
+              # --no-merges to match the commit list built below.
+              COUNT=$(git rev-list --count --no-merges "${BEFORE}..${UPSTREAM_REF}")
               echo "status=updated" >> "$GITHUB_OUTPUT"
               echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
               # Random delimiter so a commit subject can't terminate the block.
