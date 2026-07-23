@@ -52,7 +52,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Mints an App token, exports it as GH_TOKEN, and checks out with it. The
+      # Creates an App token, exports it as GH_TOKEN, and checks out with it. The
       # App must be installed on this repo with contents:write + issues:write.
       - name: Checkout ${{ matrix.local_branch }}
         uses: mongodb-labs/drivers-github-tools/secure-checkout@v3
