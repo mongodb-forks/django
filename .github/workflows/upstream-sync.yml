@@ -1,29 +1,9 @@
 name: Sync with upstream Django
 
-# Keeps each mongodb-X.Y.x fork branch in sync with its upstream Django
-# counterpart. Reimplements the `dbx sync django --all-branches` flow natively
-# (no external CLI): for each mapped branch it rebases onto upstream, and then
-# either reports the incoming commits (dry run) or force-pushes the rebased
-# branch and re-triggers the pinned downstream backend CI.
-#
-# WHY FORCE-PUSH INSTEAD OF A PR:
-#   A fork branch is maintained by rebasing onto upstream, which rewrites
-#   history. You cannot open a clean pull request from a rebased branch back
-#   onto itself — "rebase and merge" would duplicate the fork's own commits and
-#   produce a confusing non-linear history. The correct way to advance a rebased
-#   fork branch is a direct force-push. This workflow does that, then repairs the
-#   one thing a force-push breaks: downstream backend CI (GitHub Actions runs and
-#   Evergreen patches) pins the fork branch at a ref, so a rebased branch does not
-#   re-run on its own — we re-trigger it explicitly.
-#
-# SAFETY MODEL:
-#   `dry_run` defaults to true. The weekly cron therefore only *reports* incoming
-#   upstream commits by opening/updating an issue — it never rewrites a branch
-#   unattended. Actually rebasing + force-pushing a branch requires a manual
-#   dispatch with dry_run=false, keeping a human in the loop. This is deliberate:
-#   on stable branches an upstream rebase can pull in tests incompatible with
-#   MongoDB and redden CI across every open backend PR, so the decision to sync
-#   should be a person's, not a cron's.
+# Keeps each mongodb-X.Y.x fork branch in sync with upstream Django by rebasing
+# and force-pushing (a rebased branch can't be advanced via a PR). dry_run
+# defaults to true: the weekly cron only reports incoming commits and never
+# rewrites a branch unattended — a real sync needs a manual dry_run=false run.
 
 on:
   schedule:
@@ -35,9 +15,6 @@ on:
         type: boolean
         default: true
 
-# Faithful to config.toml [repo.groups.django]: mongodb-6.2.x tracks upstream
-# main until Django cuts stable/6.2.x; 5.0.x / 5.1.x are omitted (EOL, upstream
-# stable branches deleted).
 env:
   UPSTREAM_URL: https://github.com/django/django.git
   BACKEND_REPO: mongodb/django-mongodb-backend
@@ -46,25 +23,24 @@ jobs:
   sync:
     name: ${{ matrix.local_branch }}
     runs-on: ubuntu-latest
-    # All GitHub API/git access uses App tokens (secure-checkout for this repo,
-    # a backend-scoped token for the re-trigger), not the default GITHUB_TOKEN —
-    # so it needs no write scopes. Required scopes live on the GitHub App instead.
+    # Auth is via the secure-checkout App token, not GITHUB_TOKEN.
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
+        # ci_rerun: how the future re-trigger action (INTPYTHON-1025) should
+        # re-run backend CI for this branch. mongodb-6.2.x tracks upstream main
+        # until Django cuts stable/6.2.x.
         include:
           - local_branch: mongodb-6.2.x
             upstream_branch: main
-            # ci_rerun target: re-run backend PR #535 + retry its Evergreen patch
             ci_rerun: '{"kind":"evergreen","pr":535}'
           - local_branch: mongodb-6.1.x
             upstream_branch: stable/6.1.x
             ci_rerun: '{"kind":"evergreen","pr":422}'
           - local_branch: mongodb-6.0.x
             upstream_branch: stable/6.0.x
-            # ci_rerun target: dispatch backend test-python* workflows on `main`
             ci_rerun: '{"kind":"ref","ref":"main"}'
           - local_branch: mongodb-5.2.x
             upstream_branch: stable/5.2.x
@@ -76,12 +52,9 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      # secure-checkout mints a short-lived GitHub App token and exports it as a
-      # global GH_TOKEN, then checks out with it — replacing the repo-scoped
-      # GITHUB_TOKEN. The App must be installed on THIS repo with contents:write
-      # (force-push) and issues:write (report / conflict issues). Pin to a SHA and
-      # let Dependabot bump it, per drivers-github-tools guidance.
-      - name: Checkout ${{ matrix.local_branch }} (App-token auth)
+      # Mints an App token, exports it as GH_TOKEN, and checks out with it. The
+      # App must be installed on this repo with contents:write + issues:write.
+      - name: Checkout ${{ matrix.local_branch }}
         uses: mongodb-labs/drivers-github-tools/secure-checkout@v3
         with:
           app_id: ${{ vars.APP_ID }}
@@ -107,13 +80,10 @@ jobs:
               echo "status=unchanged" >> "$GITHUB_OUTPUT"
               echo "Already up to date with $UPSTREAM_REF."
             else
-              # Commits present upstream but not previously on the fork branch —
-              # i.e. what this sync pulls in. Compared against the pre-rebase tip.
               COUNT=$(git rev-list --count "${BEFORE}..${UPSTREAM_REF}")
               echo "status=updated" >> "$GITHUB_OUTPUT"
               echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
-              # Random delimiter so a commit subject that is literally the
-              # delimiter can't terminate the block early / inject output.
+              # Random delimiter so a commit subject can't terminate the block.
               DELIM="commits_EOF_${RANDOM}${RANDOM}"
               {
                 echo "commits<<${DELIM}"
@@ -128,11 +98,9 @@ jobs:
             echo "Rebase hit conflicts."
           fi
 
-      # ---- DRY RUN: report incoming commits, change nothing --------------------
       - name: Report incoming commits (dry run)
         if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != false
         env:
-          # GH_TOKEN is the global App token exported by secure-checkout.
           COUNT: ${{ steps.rebase.outputs.count }}
           COMMITS: ${{ steps.rebase.outputs.commits }}
         run: |
@@ -148,23 +116,13 @@ jobs:
             gh issue create --title "$TITLE" --body "$BODY"
           fi
 
-      # ---- REAL SYNC: force-push the rebased branch ----------------------------
       - name: Force-push rebased ${{ matrix.local_branch }}
         if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
         run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
 
-      # PLACEHOLDER: re-trigger downstream backend CI.
-      #
-      # A force-push rewrites the fork branch history, but $BACKEND_REPO's CI pins
-      # the fork branch at a ref, so it does not re-run on its own. The re-trigger
-      # (re-run backend Actions runs / 'evergreen retry' / dispatch test-python*)
-      # is intentionally NOT implemented here: it is a cross-repo operation that
-      # will move into a dedicated drivers-github-tools action (INTPYTHON-1025),
-      # which will also mint the backend-scoped App token it needs.
-      # Until then, backend CI must be re-triggered manually after a real sync.
-      #
-      # The per-branch `ci_rerun` matrix values above capture the intended target
-      # for each branch so the future action can consume them unchanged.
+      # Backend CI pins the fork branch at a ref, so a force-push doesn't re-run
+      # it. Automating that cross-repo re-trigger is deferred to INTPYTHON-1025;
+      # until then it's manual.
       - name: Re-trigger downstream backend CI (not yet implemented)
         if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
         env:
@@ -172,12 +130,9 @@ jobs:
         run: |
           echo "::warning::Fork branch force-pushed, but downstream backend CI was NOT re-triggered."
           echo "Re-trigger $BACKEND_REPO CI manually (target: $CI_RERUN)."
-          echo "Automated re-trigger is pending a drivers-github-tools action."
 
-      # ---- CONFLICT: open an issue for manual resolution -----------------------
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
-        # GH_TOKEN is the global App token exported by secure-checkout.
         run: |
           set -euo pipefail
           TITLE="Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
