@@ -46,11 +46,11 @@ jobs:
   sync:
     name: ${{ matrix.local_branch }}
     runs-on: ubuntu-latest
+    # All GitHub API/git access uses App tokens (secure-checkout for this repo,
+    # a backend-scoped token for the re-trigger), not the default GITHUB_TOKEN —
+    # so it needs no write scopes. Required scopes live on the GitHub App instead.
     permissions:
-      contents: write        # force-push rebased branch
-      issues: write          # open conflict / report issues
-      actions: write         # re-run / dispatch downstream workflow runs
-      pull-requests: write   # comment 'evergreen retry' on backend PRs
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -76,13 +76,18 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Checkout ${{ matrix.local_branch }}
-        uses: actions/checkout@v4
+      # secure-checkout mints a short-lived GitHub App token and exports it as a
+      # global GH_TOKEN, then checks out with it — replacing the repo-scoped
+      # GITHUB_TOKEN. The App must be installed on THIS repo with contents:write
+      # (force-push) and issues:write (report / conflict issues). Pin to a SHA and
+      # let Dependabot bump it, per drivers-github-tools guidance.
+      - name: Checkout ${{ matrix.local_branch }} (App-token auth)
+        uses: mongodb-labs/drivers-github-tools/secure-checkout@v3
         with:
+          app_id: ${{ vars.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
           ref: ${{ matrix.local_branch }}
           fetch-depth: 0
-          # Persist a token so the later force-push is authenticated.
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fetch upstream
         run: |
@@ -107,10 +112,13 @@ jobs:
               COUNT=$(git rev-list --count "${BEFORE}..${UPSTREAM_REF}")
               echo "status=updated" >> "$GITHUB_OUTPUT"
               echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+              # Random delimiter so a commit subject that is literally the
+              # delimiter can't terminate the block early / inject output.
+              DELIM="commits_EOF_${RANDOM}${RANDOM}"
               {
-                echo "commits<<EOF"
+                echo "commits<<${DELIM}"
                 git log --no-merges --pretty='- %h %s' "${BEFORE}..${UPSTREAM_REF}"
-                echo "EOF"
+                echo "${DELIM}"
               } >> "$GITHUB_OUTPUT"
               echo "Rebased; ${COUNT} new upstream commit(s)."
             fi
@@ -124,7 +132,7 @@ jobs:
       - name: Report incoming commits (dry run)
         if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GH_TOKEN is the global App token exported by secure-checkout.
           COUNT: ${{ steps.rebase.outputs.count }}
           COMMITS: ${{ steps.rebase.outputs.commits }}
         run: |
@@ -145,64 +153,31 @@ jobs:
         if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
         run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
 
-      - name: Re-trigger downstream backend CI
+      # PLACEHOLDER: re-trigger downstream backend CI.
+      #
+      # A force-push rewrites the fork branch history, but $BACKEND_REPO's CI pins
+      # the fork branch at a ref, so it does not re-run on its own. The re-trigger
+      # (re-run backend Actions runs / 'evergreen retry' / dispatch test-python*)
+      # is intentionally NOT implemented here: it is a cross-repo operation that
+      # will move into a dedicated drivers-github-tools action (INTPYTHON-1025),
+      # which will also mint the backend-scoped App token it needs.
+      # Until then, backend CI must be re-triggered manually after a real sync.
+      #
+      # The per-branch `ci_rerun` matrix values above capture the intended target
+      # for each branch so the future action can consume them unchanged.
+      - name: Re-trigger downstream backend CI (not yet implemented)
         if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI_RERUN: ${{ matrix.ci_rerun }}
         run: |
-          set -euo pipefail
-          KIND=$(jq -r '.kind' <<<"$CI_RERUN")
-          echo "Downstream CI re-run for ${{ matrix.local_branch }} → $BACKEND_REPO (kind=$KIND)"
-
-          rerun_pr_runs() {   # re-run the Actions runs on an open PR's head commit
-            local pr="$1"
-            local sha
-            sha=$(gh pr view "$pr" --repo "$BACKEND_REPO" --json headRefOid --jq .headRefOid)
-            if [ -z "$sha" ]; then echo "  PR #$pr: no head commit"; return; fi
-            local ids
-            ids=$(gh api "repos/$BACKEND_REPO/actions/runs?head_sha=$sha&per_page=100" \
-              --jq '.workflow_runs[].id')
-            if [ -z "$ids" ]; then echo "  PR #$pr: no runs on $sha"; return; fi
-            for id in $ids; do
-              gh api -X POST "repos/$BACKEND_REPO/actions/runs/$id/rerun" >/dev/null \
-                && echo "  PR #$pr: re-queued run $id" \
-                || echo "  PR #$pr: run $id not re-queued (already running / perms)"
-            done
-          }
-
-          retry_evergreen() { # Evergreen pins the fork ref, so nudge it explicitly
-            local pr="$1"
-            gh pr comment "$pr" --repo "$BACKEND_REPO" --body "evergreen retry" \
-              && echo "  PR #$pr: commented 'evergreen retry'"
-          }
-
-          dispatch_ref() {    # dispatch test-python* workflows on a backend ref
-            local ref="$1"
-            local paths
-            paths=$(gh api "repos/$BACKEND_REPO/actions/workflows" \
-              --jq '.workflows[] | select(.path | test("workflows/test-python")) | .path')
-            if [ -z "$paths" ]; then echo "  no test-python* workflows"; return; fi
-            for p in $paths; do
-              name=$(basename "$p")
-              gh workflow run "$name" --repo "$BACKEND_REPO" --ref "$ref" \
-                && echo "  dispatched $name @ $ref" \
-                || echo "  $name: dispatch failed (no workflow_dispatch trigger / perms)"
-            done
-          }
-
-          case "$KIND" in
-            pr)        rerun_pr_runs "$(jq -r '.pr' <<<"$CI_RERUN")" ;;
-            evergreen) pr=$(jq -r '.pr' <<<"$CI_RERUN"); rerun_pr_runs "$pr"; retry_evergreen "$pr" ;;
-            ref)       dispatch_ref "$(jq -r '.ref' <<<"$CI_RERUN")" ;;
-            *)         echo "  unknown ci_rerun kind: $KIND" ;;
-          esac
+          echo "::warning::Fork branch force-pushed, but downstream backend CI was NOT re-triggered."
+          echo "Re-trigger $BACKEND_REPO CI manually (target: $CI_RERUN)."
+          echo "Automated re-trigger is pending a drivers-github-tools action."
 
       # ---- CONFLICT: open an issue for manual resolution -----------------------
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # GH_TOKEN is the global App token exported by secure-checkout.
         run: |
           set -euo pipefail
           TITLE="Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
