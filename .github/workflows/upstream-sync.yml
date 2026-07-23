@@ -1,0 +1,153 @@
+name: Sync with upstream Django
+
+# Keeps each mongodb-X.Y.x fork branch in sync with upstream Django by rebasing
+# and force-pushing (a rebased branch can't be advanced via a PR). dry_run
+# defaults to true: the weekly cron only reports incoming commits and never
+# rewrites a branch unattended — a real sync needs a manual dry_run=false run.
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # Every Monday 09:00 UTC (report-only via dry_run default)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — rebase and report incoming commits, but do not force-push or re-run CI'
+        type: boolean
+        default: true
+
+env:
+  UPSTREAM_URL: https://github.com/django/django.git
+  BACKEND_REPO: mongodb/django-mongodb-backend
+
+jobs:
+  sync:
+    name: ${{ matrix.local_branch }}
+    runs-on: ubuntu-latest
+    # Serialize per branch so a cron and a manual run can't rebase/force-push the
+    # same branch at once. Don't cancel: an in-progress force-push must finish.
+    concurrency:
+      group: upstream-sync-${{ matrix.local_branch }}
+      cancel-in-progress: false
+    # Auth is via the secure-checkout App token, not GITHUB_TOKEN.
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # ci_rerun: how the future re-trigger action (INTPYTHON-1025) should
+        # re-run backend CI for this branch. mongodb-6.2.x tracks upstream main
+        # until Django cuts stable/6.2.x.
+        include:
+          - local_branch: mongodb-6.2.x
+            upstream_branch: main
+            ci_rerun: '{"kind":"evergreen","pr":535}'
+          - local_branch: mongodb-6.1.x
+            upstream_branch: stable/6.1.x
+            ci_rerun: '{"kind":"evergreen","pr":422}'
+          - local_branch: mongodb-6.0.x
+            upstream_branch: stable/6.0.x
+            ci_rerun: '{"kind":"ref","ref":"main"}'
+          - local_branch: mongodb-5.2.x
+            upstream_branch: stable/5.2.x
+            ci_rerun: '{"kind":"evergreen","pr":562}'
+
+    steps:
+      - name: Configure git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Creates an App token, exports it as GH_TOKEN, and checks out with it. The
+      # App must be installed on this repo with contents:write + issues:write.
+      - name: Checkout ${{ matrix.local_branch }}
+        uses: mongodb-labs/drivers-github-tools/secure-checkout@v3
+        with:
+          app_id: ${{ vars.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          ref: ${{ matrix.local_branch }}
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch --no-tags upstream "${{ matrix.upstream_branch }}"
+
+      - name: Rebase onto upstream/${{ matrix.upstream_branch }}
+        id: rebase
+        run: |
+          set -euo pipefail
+          BEFORE=$(git rev-parse HEAD)
+          UPSTREAM_REF="upstream/${{ matrix.upstream_branch }}"
+
+          if git rebase "$UPSTREAM_REF"; then
+            AFTER=$(git rev-parse HEAD)
+            if [ "$BEFORE" = "$AFTER" ]; then
+              echo "status=unchanged" >> "$GITHUB_OUTPUT"
+              echo "Already up to date with $UPSTREAM_REF."
+            else
+              # --no-merges to match the commit list built below.
+              COUNT=$(git rev-list --count --no-merges "${BEFORE}..${UPSTREAM_REF}")
+              echo "status=updated" >> "$GITHUB_OUTPUT"
+              echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+              # Random delimiter so a commit subject can't terminate the block.
+              DELIM="commits_EOF_${RANDOM}${RANDOM}"
+              {
+                echo "commits<<${DELIM}"
+                git log --no-merges --pretty='- %h %s' "${BEFORE}..${UPSTREAM_REF}"
+                echo "${DELIM}"
+              } >> "$GITHUB_OUTPUT"
+              echo "Rebased; ${COUNT} new upstream commit(s)."
+            fi
+          else
+            git rebase --abort || true
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+            echo "Rebase hit conflicts."
+          fi
+
+      - name: Report incoming commits (dry run)
+        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != false
+        env:
+          COUNT: ${{ steps.rebase.outputs.count }}
+          COMMITS: ${{ steps.rebase.outputs.commits }}
+        run: |
+          set -euo pipefail
+          TITLE="Upstream sync available: ${{ matrix.local_branch }} ← upstream/${{ matrix.upstream_branch }}"
+          BODY=$(printf '%s new upstream commit(s) are ready to rebase into `%s`.\n\n%s\n\nRun this workflow manually with **dry_run = false** to rebase and force-push. Backend CI must then be re-triggered manually (see INTPYTHON-1025).' \
+            "$COUNT" "${{ matrix.local_branch }}" "$COMMITS")
+          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+            echo "Updated existing report issue #$EXISTING."
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
+
+      - name: Force-push rebased ${{ matrix.local_branch }}
+        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
+        run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
+
+      # Backend CI pins the fork branch at a ref, so a force-push doesn't re-run
+      # it. Automating that cross-repo re-trigger is deferred to INTPYTHON-1025;
+      # until then it's manual.
+      - name: Re-trigger downstream backend CI (not yet implemented)
+        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
+        env:
+          CI_RERUN: ${{ matrix.ci_rerun }}
+        run: |
+          echo "::warning::Fork branch force-pushed, but downstream backend CI was NOT re-triggered."
+          echo "Re-trigger $BACKEND_REPO CI manually (target: $CI_RERUN)."
+
+      - name: Open conflict issue
+        if: steps.rebase.outputs.status == 'conflict'
+        run: |
+          set -euo pipefail
+          TITLE="Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
+          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Conflict issue #$EXISTING already open."
+          else
+            BODY=$(printf 'Automated sync could not rebase `%s` onto `upstream/%s` — manual resolution required.\n\nRun log: %s' \
+              "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}" \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
