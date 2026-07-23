@@ -106,9 +106,9 @@ jobs:
         run: |
           set -euo pipefail
           TITLE="Upstream sync available: ${{ matrix.local_branch }} ← upstream/${{ matrix.upstream_branch }}"
-          BODY=$(printf '%s new upstream commit(s) are ready to rebase into `%s`.\n\n%s\n\nRun this workflow manually with **dry_run = false** to rebase, force-push, and re-trigger backend CI.' \
+          BODY=$(printf '%s new upstream commit(s) are ready to rebase into `%s`.\n\n%s\n\nRun this workflow manually with **dry_run = false** to rebase and force-push. Backend CI must then be re-triggered manually (see INTPYTHON-1025).' \
             "$COUNT" "${{ matrix.local_branch }}" "$COMMITS")
-          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number' || true)
+          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --body "$BODY"
             echo "Updated existing report issue #$EXISTING."
@@ -136,12 +136,12 @@ jobs:
         run: |
           set -euo pipefail
           TITLE="Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
-          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number' || true)
+          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Conflict issue #$EXISTING already open."
           else
-            gh issue create --title "$TITLE" --body \
-              "Automated sync could not rebase \`${{ matrix.local_branch }}\` onto \`upstream/${{ matrix.upstream_branch }}\` — manual resolution required.
-
-          Run log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            BODY=$(printf 'Automated sync could not rebase `%s` onto `upstream/%s` — manual resolution required.\n\nRun log: %s' \
+              "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}" \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            gh issue create --title "$TITLE" --body "$BODY"
           fi
