@@ -17,12 +17,9 @@ jobs:
   sync:
     name: ${{ matrix.local_branch }}
     runs-on: ubuntu-latest
-    # Holds APP_ID and APP_PRIVATE_KEY for secure-checkout. Without this the
-    # credentials are out of scope and the App token can't be minted. Keep the
-    # environment free of required reviewers, or every daily run waits on a human.
+    # Scopes in APP_ID and APP_PRIVATE_KEY for secure-checkout. No required
+    # reviewers on it, or every daily run waits on a human.
     environment: automation
-    # Don't run the cron on a personal fork of this repo, but let anyone dispatch
-    # it by hand.
     if: github.repository_owner == 'mongodb-forks' || github.event_name == 'workflow_dispatch'
     # Serialize per branch so a cron and a manual run can't rebase/force-push the
     # same branch at once. Don't cancel: an in-progress force-push must finish.
