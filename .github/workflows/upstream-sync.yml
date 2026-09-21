@@ -1,9 +1,14 @@
 name: Sync with upstream Django
 
 # Keeps each mongodb-X.Y.x fork branch in sync with upstream Django by rebasing
-# and force-pushing (a rebased branch can't be advanced via a PR). dry_run
-# defaults to true: the weekly cron only reports incoming commits and never
-# rewrites a branch unattended — a real sync needs a manual dry_run=false run.
+# and force-pushing (a rebased branch can't be advanced via a PR). The dry run
+# is on unless a manual dispatch explicitly turns it off, so the weekly cron
+# only reports incoming commits and never rewrites a branch unattended.
+#
+# This is a partial reimplementation of `dbx sync django --all-branches`. It
+# does not yet re-trigger downstream backend CI (INTPYTHON-1025) and has no
+# equivalent of that command's --backport-report, so dbx is still needed for a
+# full sync.
 
 on:
   schedule:
@@ -28,28 +33,39 @@ jobs:
     concurrency:
       group: upstream-sync-${{ matrix.local_branch }}
       cancel-in-progress: false
-    # Auth is via the secure-checkout App token, not GITHUB_TOKEN.
+    # The push is authenticated with the secure-checkout App token; the issue
+    # steps use GITHUB_TOKEN, which secure-checkout's App token cannot replace
+    # because that action requests only contents + pull-requests.
     permissions:
       contents: read
+      issues: write
+    env:
+      # A schedule event carries no inputs, and GitHub coerces the resulting
+      # null to false in a loose comparison — so `inputs.dry_run == false` is
+      # true on the cron and would force-push unattended. Resolve the flag once
+      # here instead: only an explicit dispatch can turn the dry run off.
+      DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
     strategy:
       fail-fast: false
       matrix:
         # ci_rerun: how the future re-trigger action (INTPYTHON-1025) should
-        # re-run backend CI for this branch. mongodb-6.2.x tracks upstream main
-        # until Django cuts stable/6.2.x.
+        # re-run backend CI for this branch. Mirrors the ci_rerun mapping in
+        # dbx-python-cli's config.toml; keep the two in step until that ticket
+        # lands. mongodb-6.2.x tracks upstream main until Django cuts
+        # stable/6.2.x.
         include:
           - local_branch: mongodb-6.2.x
             upstream_branch: main
-            ci_rerun: '{"kind":"evergreen","pr":535}'
+            ci_rerun: '{"kind":"evergreen","pr":602}'
           - local_branch: mongodb-6.1.x
             upstream_branch: stable/6.1.x
-            ci_rerun: '{"kind":"evergreen","pr":422}'
+            ci_rerun: '{"kind":"ref","ref":"main"}'
           - local_branch: mongodb-6.0.x
             upstream_branch: stable/6.0.x
-            ci_rerun: '{"kind":"ref","ref":"main"}'
+            ci_rerun: '{"kind":"ref","ref":"6.0.x"}'
           - local_branch: mongodb-5.2.x
             upstream_branch: stable/5.2.x
-            ci_rerun: '{"kind":"evergreen","pr":562}'
+            ci_rerun: '{"kind":"evergreen","pr":607}'
 
     steps:
       - name: Configure git
@@ -58,7 +74,9 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       # Creates an App token, exports it as GH_TOKEN, and checks out with it. The
-      # App must be installed on this repo with contents:write + issues:write.
+      # App must be installed on this repo with contents:write. It cannot open
+      # issues: secure-checkout requests only contents + pull-requests, so the
+      # issue steps below override GH_TOKEN with GITHUB_TOKEN.
       - name: Checkout ${{ matrix.local_branch }}
         uses: mongodb-labs/drivers-github-tools/secure-checkout@v3
         with:
@@ -105,16 +123,20 @@ jobs:
           fi
 
       - name: Report incoming commits (dry run)
-        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run != false
+        if: steps.rebase.outputs.status == 'updated' && env.DRY_RUN != 'false'
         env:
+          # secure-checkout put the App token in GH_TOKEN; it has no issues
+          # scope, so opening an issue needs GITHUB_TOKEN instead.
+          GH_TOKEN: ${{ github.token }}
           COUNT: ${{ steps.rebase.outputs.count }}
           COMMITS: ${{ steps.rebase.outputs.commits }}
+          TITLE: "Upstream sync available: ${{ matrix.local_branch }} ← upstream/${{ matrix.upstream_branch }}"
         run: |
           set -euo pipefail
-          TITLE="Upstream sync available: ${{ matrix.local_branch }} ← upstream/${{ matrix.upstream_branch }}"
           BODY=$(printf '%s new upstream commit(s) are ready to rebase into `%s`.\n\n%s\n\nRun this workflow manually with **dry_run = false** to rebase and force-push. Backend CI must then be re-triggered manually (see INTPYTHON-1025).' \
             "$COUNT" "${{ matrix.local_branch }}" "$COMMITS")
-          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --body "$BODY"
             echo "Updated existing report issue #$EXISTING."
@@ -123,14 +145,14 @@ jobs:
           fi
 
       - name: Force-push rebased ${{ matrix.local_branch }}
-        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
+        if: steps.rebase.outputs.status == 'updated' && env.DRY_RUN == 'false'
         run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
 
       # Backend CI pins the fork branch at a ref, so a force-push doesn't re-run
       # it. Automating that cross-repo re-trigger is deferred to INTPYTHON-1025;
       # until then it's manual.
       - name: Re-trigger downstream backend CI (not yet implemented)
-        if: steps.rebase.outputs.status == 'updated' && inputs.dry_run == false
+        if: steps.rebase.outputs.status == 'updated' && env.DRY_RUN == 'false'
         env:
           CI_RERUN: ${{ matrix.ci_rerun }}
         run: |
@@ -139,10 +161,13 @@ jobs:
 
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
         run: |
           set -euo pipefail
-          TITLE="Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
-          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Conflict issue #$EXISTING already open."
           else
