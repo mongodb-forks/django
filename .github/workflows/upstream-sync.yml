@@ -17,6 +17,13 @@ jobs:
   sync:
     name: ${{ matrix.local_branch }}
     runs-on: ubuntu-latest
+    # Holds APP_ID and APP_PRIVATE_KEY for secure-checkout. Without this the
+    # credentials are out of scope and the App token can't be minted. Keep the
+    # environment free of required reviewers, or every daily run waits on a human.
+    environment: automation
+    # Don't run the cron on a personal fork of this repo, but let anyone dispatch
+    # it by hand.
+    if: github.repository_owner == 'mongodb-forks' || github.event_name == 'workflow_dispatch'
     # Serialize per branch so a cron and a manual run can't rebase/force-push the
     # same branch at once. Don't cancel: an in-progress force-push must finish.
     concurrency:
@@ -30,16 +37,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # mongodb-6.2.x tracks upstream main until Django cuts stable/6.2.x.
+        # This list is maintained by hand as Django's release branches come and
+        # go. Django applies fixes to the last two feature releases plus any
+        # supported LTS (docs/internals/release-process.txt), so update it when:
+        #
+        #   * Django cuts stable/X.Y.x — add the matching mongodb-X.Y.x, and
+        #     repoint the branch that was tracking main (a branch only tracks
+        #     main while its Django version is unreleased).
+        #   * A stable branch reaches EOL and upstream deletes it — drop that
+        #     row, or the job fails on a missing upstream ref every day.
+        #
+        # Only branches whose upstream target exists today are listed. Not
+        # mapped: mongodb-5.0.x / mongodb-5.1.x, whose upstream branches are
+        # already deleted.
         include:
           - local_branch: mongodb-6.2.x
-            upstream_branch: main
+            upstream_branch: main   # until Django cuts stable/6.2.x
           - local_branch: mongodb-6.1.x
             upstream_branch: stable/6.1.x
           - local_branch: mongodb-6.0.x
             upstream_branch: stable/6.0.x
           - local_branch: mongodb-5.2.x
-            upstream_branch: stable/5.2.x
+            upstream_branch: stable/5.2.x   # LTS
 
     steps:
       - name: Configure git
@@ -50,7 +69,7 @@ jobs:
       # Creates an App token, exports it as GH_TOKEN, and checks out with it.
       # The App needs contents:write on this repo.
       - name: Checkout ${{ matrix.local_branch }}
-        uses: mongodb-labs/drivers-github-tools/secure-checkout@v3
+        uses: mongodb-labs/drivers-github-tools/secure-checkout@f137fdd28483af14ebf466ebc5aa789fbf867218  # v3.0.5
         with:
           app_id: ${{ vars.APP_ID }}
           private_key: ${{ secrets.APP_PRIVATE_KEY }}
