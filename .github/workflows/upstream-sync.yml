@@ -3,8 +3,6 @@ name: Sync with upstream Django
 # Keeps each mongodb-X.Y.x fork branch in sync with upstream Django by rebasing
 # and force-pushing (a rebased branch can't be advanced via a PR). The dry run
 # is on unless a manual dispatch turns it off, so the cron only reports.
-#
-# Downstream backend CI is not re-triggered after a sync (INTPYTHON-1025).
 
 on:
   schedule:
