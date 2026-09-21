@@ -1,18 +1,13 @@
 name: Sync with upstream Django
 
 # Keeps each mongodb-X.Y.x fork branch in sync with upstream Django by rebasing
-# and force-pushing (a rebased branch can't be advanced via a PR). The dry run
-# is on unless a manual dispatch turns it off, so the cron only reports.
+# and force-pushing (a rebased branch can't be advanced via a PR). A rebase that
+# conflicts is aborted and reported as an issue for manual resolution.
 
 on:
   schedule:
-    - cron: '0 9 * * 1'   # Every Monday 09:00 UTC (report-only via dry_run default)
+    - cron: '0 9 * * *'   # Daily 09:00 UTC
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Dry run — rebase and report incoming commits, but do not force-push or re-run CI'
-        type: boolean
-        default: true
 
 env:
   UPSTREAM_URL: https://github.com/django/django.git
@@ -27,16 +22,11 @@ jobs:
     concurrency:
       group: upstream-sync-${{ matrix.local_branch }}
       cancel-in-progress: false
-    # The push uses the secure-checkout App token; the issue steps need
+    # The push uses the secure-checkout App token; the conflict issue needs
     # GITHUB_TOKEN because that action requests no issues scope.
     permissions:
       contents: read
       issues: write
-    env:
-      # A schedule event has no inputs, and GitHub coerces that null to false —
-      # so `inputs.dry_run == false` is true on the cron and would force-push
-      # unattended. Only an explicit dispatch can turn the dry run off.
-      DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,40 +94,28 @@ jobs:
             echo "Rebase hit conflicts."
           fi
 
-      - name: Report incoming commits (dry run)
-        if: steps.rebase.outputs.status == 'updated' && env.DRY_RUN != 'false'
-        env:
-          # Overrides the App token secure-checkout left in GH_TOKEN, which
-          # cannot open issues.
-          GH_TOKEN: ${{ github.token }}
-          COUNT: ${{ steps.rebase.outputs.count }}
-          COMMITS: ${{ steps.rebase.outputs.commits }}
-          TITLE: "Upstream sync available: ${{ matrix.local_branch }} ← upstream/${{ matrix.upstream_branch }}"
-        run: |
-          set -euo pipefail
-          BODY=$(printf '%s new upstream commit(s) are ready to rebase into `%s`.\n\n%s\n\nRun this workflow manually with **dry_run = false** to rebase and force-push. Backend CI must then be re-triggered manually (see INTPYTHON-1025).' \
-            "$COUNT" "${{ matrix.local_branch }}" "$COMMITS")
-          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
-            --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "$BODY"
-            echo "Updated existing report issue #$EXISTING."
-          else
-            gh issue create --title "$TITLE" --body "$BODY"
-          fi
-
+      # --force-with-lease, not --force: the lease is against the ref this run
+      # checked out, so a push that landed on the fork branch in the meantime
+      # fails the run instead of being silently discarded.
       - name: Force-push rebased ${{ matrix.local_branch }}
-        if: steps.rebase.outputs.status == 'updated' && env.DRY_RUN == 'false'
+        if: steps.rebase.outputs.status == 'updated'
         run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
 
-      # Backend CI pins the fork branch at a ref, so a force-push doesn't re-run
-      # it. Automating that cross-repo re-trigger is deferred to INTPYTHON-1025;
-      # until then it's manual.
-      - name: Warn that downstream backend CI is stale
-        if: steps.rebase.outputs.status == 'updated' && env.DRY_RUN == 'false'
+      # Record what landed, so a branch that turns out to be broken can be
+      # traced to the commits this run rebased onto it.
+      - name: Summarize the sync
+        if: steps.rebase.outputs.status == 'updated'
+        env:
+          COUNT: ${{ steps.rebase.outputs.count }}
+          COMMITS: ${{ steps.rebase.outputs.commits }}
         run: |
-          echo "::warning::Fork branch force-pushed, but downstream backend CI was NOT re-triggered."
-          echo "Re-trigger $BACKEND_REPO CI manually (see INTPYTHON-1025)."
+          set -euo pipefail
+          {
+            printf '### %s ← upstream/%s\n\n' \
+              "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}"
+            printf '%s new upstream commit(s):\n\n%s\n' "$COUNT" "$COMMITS"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Fork branch force-pushed; re-trigger $BACKEND_REPO CI manually (see INTPYTHON-1025)."
 
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
