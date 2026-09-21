@@ -43,22 +43,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ci_rerun: how the re-trigger action (INTPYTHON-1025) should re-run
-        # backend CI for this branch. Mirrors dbx-python-cli's config.toml.
         # mongodb-6.2.x tracks upstream main until Django cuts stable/6.2.x.
         include:
           - local_branch: mongodb-6.2.x
             upstream_branch: main
-            ci_rerun: '{"kind":"evergreen","pr":602}'
           - local_branch: mongodb-6.1.x
             upstream_branch: stable/6.1.x
-            ci_rerun: '{"kind":"ref","ref":"main"}'
           - local_branch: mongodb-6.0.x
             upstream_branch: stable/6.0.x
-            ci_rerun: '{"kind":"ref","ref":"6.0.x"}'
           - local_branch: mongodb-5.2.x
             upstream_branch: stable/5.2.x
-            ci_rerun: '{"kind":"evergreen","pr":607}'
 
     steps:
       - name: Configure git
@@ -142,13 +136,11 @@ jobs:
       # Backend CI pins the fork branch at a ref, so a force-push doesn't re-run
       # it. Automating that cross-repo re-trigger is deferred to INTPYTHON-1025;
       # until then it's manual.
-      - name: Re-trigger downstream backend CI (not yet implemented)
+      - name: Warn that downstream backend CI is stale
         if: steps.rebase.outputs.status == 'updated' && env.DRY_RUN == 'false'
-        env:
-          CI_RERUN: ${{ matrix.ci_rerun }}
         run: |
           echo "::warning::Fork branch force-pushed, but downstream backend CI was NOT re-triggered."
-          echo "Re-trigger $BACKEND_REPO CI manually (target: $CI_RERUN)."
+          echo "Re-trigger $BACKEND_REPO CI manually (see INTPYTHON-1025)."
 
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
