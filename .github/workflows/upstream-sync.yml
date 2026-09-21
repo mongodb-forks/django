@@ -4,8 +4,7 @@ name: Sync with upstream Django
 # and force-pushing (a rebased branch can't be advanced via a PR). The dry run
 # is on unless a manual dispatch turns it off, so the cron only reports.
 #
-# Partial reimplementation of `dbx sync django --all-branches`: no downstream CI
-# re-trigger (INTPYTHON-1025), no --backport-report equivalent.
+# Downstream backend CI is not re-triggered after a sync (INTPYTHON-1025).
 
 on:
   schedule:
