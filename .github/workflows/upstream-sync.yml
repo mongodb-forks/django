@@ -2,13 +2,10 @@ name: Sync with upstream Django
 
 # Keeps each mongodb-X.Y.x fork branch in sync with upstream Django by rebasing
 # and force-pushing (a rebased branch can't be advanced via a PR). The dry run
-# is on unless a manual dispatch explicitly turns it off, so the weekly cron
-# only reports incoming commits and never rewrites a branch unattended.
+# is on unless a manual dispatch turns it off, so the cron only reports.
 #
-# This is a partial reimplementation of `dbx sync django --all-branches`. It
-# does not yet re-trigger downstream backend CI (INTPYTHON-1025) and has no
-# equivalent of that command's --backport-report, so dbx is still needed for a
-# full sync.
+# Partial reimplementation of `dbx sync django --all-branches`: no downstream CI
+# re-trigger (INTPYTHON-1025), no --backport-report equivalent.
 
 on:
   schedule:
@@ -33,26 +30,22 @@ jobs:
     concurrency:
       group: upstream-sync-${{ matrix.local_branch }}
       cancel-in-progress: false
-    # The push is authenticated with the secure-checkout App token; the issue
-    # steps use GITHUB_TOKEN, which secure-checkout's App token cannot replace
-    # because that action requests only contents + pull-requests.
+    # The push uses the secure-checkout App token; the issue steps need
+    # GITHUB_TOKEN because that action requests no issues scope.
     permissions:
       contents: read
       issues: write
     env:
-      # A schedule event carries no inputs, and GitHub coerces the resulting
-      # null to false in a loose comparison — so `inputs.dry_run == false` is
-      # true on the cron and would force-push unattended. Resolve the flag once
-      # here instead: only an explicit dispatch can turn the dry run off.
+      # A schedule event has no inputs, and GitHub coerces that null to false —
+      # so `inputs.dry_run == false` is true on the cron and would force-push
+      # unattended. Only an explicit dispatch can turn the dry run off.
       DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
     strategy:
       fail-fast: false
       matrix:
-        # ci_rerun: how the future re-trigger action (INTPYTHON-1025) should
-        # re-run backend CI for this branch. Mirrors the ci_rerun mapping in
-        # dbx-python-cli's config.toml; keep the two in step until that ticket
-        # lands. mongodb-6.2.x tracks upstream main until Django cuts
-        # stable/6.2.x.
+        # ci_rerun: how the re-trigger action (INTPYTHON-1025) should re-run
+        # backend CI for this branch. Mirrors dbx-python-cli's config.toml.
+        # mongodb-6.2.x tracks upstream main until Django cuts stable/6.2.x.
         include:
           - local_branch: mongodb-6.2.x
             upstream_branch: main
@@ -73,10 +66,8 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Creates an App token, exports it as GH_TOKEN, and checks out with it. The
-      # App must be installed on this repo with contents:write. It cannot open
-      # issues: secure-checkout requests only contents + pull-requests, so the
-      # issue steps below override GH_TOKEN with GITHUB_TOKEN.
+      # Creates an App token, exports it as GH_TOKEN, and checks out with it.
+      # The App needs contents:write on this repo.
       - name: Checkout ${{ matrix.local_branch }}
         uses: mongodb-labs/drivers-github-tools/secure-checkout@v3
         with:
@@ -125,8 +116,8 @@ jobs:
       - name: Report incoming commits (dry run)
         if: steps.rebase.outputs.status == 'updated' && env.DRY_RUN != 'false'
         env:
-          # secure-checkout put the App token in GH_TOKEN; it has no issues
-          # scope, so opening an issue needs GITHUB_TOKEN instead.
+          # Overrides the App token secure-checkout left in GH_TOKEN, which
+          # cannot open issues.
           GH_TOKEN: ${{ github.token }}
           COUNT: ${{ steps.rebase.outputs.count }}
           COMMITS: ${{ steps.rebase.outputs.commits }}
