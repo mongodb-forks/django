@@ -21,32 +21,24 @@ jobs:
     # reviewers on it, or every daily run waits on a human.
     environment: automation
     if: github.repository_owner == 'mongodb-forks' || github.event_name == 'workflow_dispatch'
-    # Serialize per branch so a cron and a manual run can't rebase/force-push the
-    # same branch at once. Don't cancel: an in-progress force-push must finish.
+    # Don't cancel: an in-progress force-push must finish.
     concurrency:
       group: upstream-sync-${{ matrix.local_branch }}
       cancel-in-progress: false
-    # The push uses the secure-checkout App token; the conflict issue needs
-    # GITHUB_TOKEN because that action requests no issues scope.
+    # issues: write is for the conflict issue, which uses GITHUB_TOKEN because
+    # the secure-checkout App token has no issues scope.
     permissions:
       contents: read
       issues: write
     strategy:
       fail-fast: false
       matrix:
-        # This list is maintained by hand as Django's release branches come and
-        # go. Django applies fixes to the last two feature releases plus any
-        # supported LTS (docs/internals/release-process.txt), so update it when:
-        #
-        #   * Django cuts stable/X.Y.x — add the matching mongodb-X.Y.x, and
-        #     repoint the branch that was tracking main (a branch only tracks
-        #     main while its Django version is unreleased).
-        #   * A stable branch reaches EOL and upstream deletes it — drop that
-        #     row, or the job fails on a missing upstream ref every day.
-        #
-        # Only branches whose upstream target exists today are listed. Not
-        # mapped: mongodb-5.0.x / mongodb-5.1.x, whose upstream branches are
-        # already deleted.
+        # Maintained by hand. When Django cuts stable/X.Y.x, add the matching
+        # mongodb-X.Y.x and repoint whichever branch was tracking main. When a
+        # stable branch reaches EOL and upstream deletes it, drop that row, or
+        # the job fails on a missing ref daily. Django supports the last two
+        # feature releases plus any LTS (docs/internals/release-process.txt);
+        # mongodb-5.0.x / mongodb-5.1.x are already gone upstream.
         include:
           - local_branch: mongodb-6.2.x
             upstream_branch: main   # until Django cuts stable/6.2.x
@@ -63,8 +55,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Creates an App token, exports it as GH_TOKEN, and checks out with it.
-      # The App needs contents:write on this repo.
+      # Mints an App token and checks out with it. The App needs contents:write.
       - name: Checkout ${{ matrix.local_branch }}
         uses: mongodb-labs/drivers-github-tools/secure-checkout@f137fdd28483af14ebf466ebc5aa789fbf867218  # v3.0.5
         with:
@@ -110,15 +101,14 @@ jobs:
             echo "Rebase hit conflicts."
           fi
 
-      # --force-with-lease, not --force: the lease is against the ref this run
-      # checked out, so a push that landed on the fork branch in the meantime
-      # fails the run instead of being silently discarded.
+      # --force-with-lease, not --force: a push that landed since checkout fails
+      # the run instead of being silently discarded.
       - name: Force-push rebased ${{ matrix.local_branch }}
         if: steps.rebase.outputs.status == 'updated'
         run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
 
-      # Record what landed, so a branch that turns out to be broken can be
-      # traced to the commits this run rebased onto it.
+      # Records what landed, so a branch that turns out to be broken can be
+      # traced back to the commits that arrived.
       - name: Summarize the sync
         if: steps.rebase.outputs.status == 'updated'
         env:
