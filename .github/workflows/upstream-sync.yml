@@ -1,0 +1,142 @@
+name: Sync with upstream Django
+
+# Keeps each mongodb-X.Y.x fork branch in sync with upstream Django by rebasing
+# and force-pushing (a rebased branch can't be advanced via a PR). A rebase that
+# conflicts is aborted and reported as an issue for manual resolution.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'   # Daily 09:00 UTC
+  workflow_dispatch:
+
+env:
+  UPSTREAM_URL: https://github.com/django/django.git
+  BACKEND_REPO: mongodb/django-mongodb-backend
+
+jobs:
+  sync:
+    name: ${{ matrix.local_branch }}
+    runs-on: ubuntu-latest
+    # Scopes in APP_ID and APP_PRIVATE_KEY for secure-checkout. No required
+    # reviewers on it, or every daily run waits on a human.
+    environment: automation
+    if: github.repository_owner == 'mongodb-forks' || github.event_name == 'workflow_dispatch'
+    # Don't cancel: an in-progress force-push must finish.
+    concurrency:
+      group: upstream-sync-${{ matrix.local_branch }}
+      cancel-in-progress: false
+    # issues: write is for the conflict issue, which uses GITHUB_TOKEN because
+    # the secure-checkout App token has no issues scope.
+    permissions:
+      contents: read
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Maintained by hand. When Django cuts stable/X.Y.x, add the matching
+        # mongodb-X.Y.x and repoint whichever branch was tracking main. When a
+        # stable branch reaches EOL and upstream deletes it, drop that row, or
+        # the job fails on a missing ref daily. Django supports the last two
+        # feature releases plus any LTS (docs/internals/release-process.txt);
+        # mongodb-5.0.x / mongodb-5.1.x are already gone upstream.
+        include:
+          - local_branch: mongodb-6.2.x
+            upstream_branch: main   # until Django cuts stable/6.2.x
+          - local_branch: mongodb-6.1.x
+            upstream_branch: stable/6.1.x
+          - local_branch: mongodb-6.0.x
+            upstream_branch: stable/6.0.x
+          - local_branch: mongodb-5.2.x
+            upstream_branch: stable/5.2.x   # LTS
+
+    steps:
+      - name: Configure git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Mints an App token and checks out with it. The App needs contents:write.
+      - name: Checkout ${{ matrix.local_branch }}
+        uses: mongodb-labs/drivers-github-tools/secure-checkout@f137fdd28483af14ebf466ebc5aa789fbf867218  # v3.0.5
+        with:
+          app_id: ${{ vars.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          ref: ${{ matrix.local_branch }}
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch --no-tags upstream "${{ matrix.upstream_branch }}"
+
+      - name: Rebase onto upstream/${{ matrix.upstream_branch }}
+        id: rebase
+        run: |
+          set -euo pipefail
+          BEFORE=$(git rev-parse HEAD)
+          UPSTREAM_REF="upstream/${{ matrix.upstream_branch }}"
+
+          if git rebase "$UPSTREAM_REF"; then
+            AFTER=$(git rev-parse HEAD)
+            if [ "$BEFORE" = "$AFTER" ]; then
+              echo "status=unchanged" >> "$GITHUB_OUTPUT"
+              echo "Already up to date with $UPSTREAM_REF."
+            else
+              # --no-merges to match the commit list built below.
+              COUNT=$(git rev-list --count --no-merges "${BEFORE}..${UPSTREAM_REF}")
+              echo "status=updated" >> "$GITHUB_OUTPUT"
+              echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+              # Random delimiter so a commit subject can't terminate the block.
+              DELIM="commits_EOF_${RANDOM}${RANDOM}"
+              {
+                echo "commits<<${DELIM}"
+                git log --no-merges --pretty='- %h %s' "${BEFORE}..${UPSTREAM_REF}"
+                echo "${DELIM}"
+              } >> "$GITHUB_OUTPUT"
+              echo "Rebased; ${COUNT} new upstream commit(s)."
+            fi
+          else
+            git rebase --abort || true
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+            echo "Rebase hit conflicts."
+          fi
+
+      # --force-with-lease, not --force: a push that landed since checkout fails
+      # the run instead of being silently discarded.
+      - name: Force-push rebased ${{ matrix.local_branch }}
+        if: steps.rebase.outputs.status == 'updated'
+        run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
+
+      # Records what landed, so a branch that turns out to be broken can be
+      # traced back to the commits that arrived.
+      - name: Summarize the sync
+        if: steps.rebase.outputs.status == 'updated'
+        env:
+          COUNT: ${{ steps.rebase.outputs.count }}
+          COMMITS: ${{ steps.rebase.outputs.commits }}
+        run: |
+          set -euo pipefail
+          {
+            printf '### %s ← upstream/%s\n\n' \
+              "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}"
+            printf '%s new upstream commit(s):\n\n%s\n' "$COUNT" "$COMMITS"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Fork branch force-pushed; re-trigger $BACKEND_REPO CI manually (see INTPYTHON-1025)."
+
+      - name: Open conflict issue
+        if: steps.rebase.outputs.status == 'conflict'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
+        run: |
+          set -euo pipefail
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Conflict issue #$EXISTING already open."
+          else
+            BODY=$(printf 'Automated sync could not rebase `%s` onto `upstream/%s` — manual resolution required.\n\nRun log: %s' \
+              "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}" \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
