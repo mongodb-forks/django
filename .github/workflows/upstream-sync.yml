@@ -57,9 +57,10 @@ jobs:
           - local_branch: mongodb-6.0.x
             upstream_branch: stable/6.0.x
             ci_rerun: '{"mongodb/django-mongodb-backend": "6.0.x"}'
+          # 622 (5.2.5 LTS backports) supersedes the closed 607.
           - local_branch: mongodb-5.2.x
             upstream_branch: stable/5.2.x   # LTS
-            ci_rerun: '{"mongodb/django-mongodb-backend": {"pr": 607, "evergreen": true}}'
+            ci_rerun: '{"mongodb/django-mongodb-backend": {"pr": 622, "evergreen": true}}'
 
     steps:
       - name: Configure git
