@@ -40,10 +40,10 @@ jobs:
         # feature releases plus any LTS (docs/internals/release-process.txt);
         # mongodb-5.0.x / mongodb-5.1.x are already gone upstream.
         #
-        # ci_rerun says how to re-test the backend branch that checks this fork
-        # branch out, since a force-push alone tells it nothing. Find the
+        # ci_rerun says how to re-test the backend branch that checks this
+        # fork branch out, since a force-push alone tells it nothing. Find the
         # consumer by grepping the backend's test-python* workflows for the
-        # fork ref, and drop ci_rerun from any row nothing consumes yet.
+        # fork ref. Leave ci_rerun empty when nothing consumes the branch.
         include:
           - local_branch: mongodb-6.2.x
             upstream_branch: main   # until Django cuts stable/6.2.x
@@ -131,8 +131,8 @@ jobs:
             printf '%s new upstream commit(s):\n\n%s\n' "$COUNT" "$COMMITS"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # The backend checks this branch out by ref, so a force-push silently
-      # changes what it builds against. Nothing else would re-test it.
+      # The backend checks this branch out by ref, so a force-push changes
+      # what it builds against. Nothing else would re-test it.
       - name: Re-trigger ${{ env.BACKEND_REPO }} CI
         if: steps.rebase.outputs.status == 'updated' && matrix.ci_rerun != ''
         # TODO(INTPYTHON-1025): repoint to the merged commit and its release tag.
