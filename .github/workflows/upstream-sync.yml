@@ -39,15 +39,24 @@ jobs:
         # the job fails on a missing ref daily. Django supports the last two
         # feature releases plus any LTS (docs/internals/release-process.txt);
         # mongodb-5.0.x / mongodb-5.1.x are already gone upstream.
+        #
+        # ci_rerun says how to re-test the backend branch that checks this fork
+        # branch out, since a force-push alone tells it nothing. Find the
+        # consumer by grepping the backend's test-python* workflows for the
+        # fork ref, and drop ci_rerun from any row nothing consumes yet.
         include:
           - local_branch: mongodb-6.2.x
             upstream_branch: main   # until Django cuts stable/6.2.x
+            ci_rerun: ''            # no backend branch uses it yet
           - local_branch: mongodb-6.1.x
             upstream_branch: stable/6.1.x
+            ci_rerun: '{"kind":"ref","ref":"main"}'
           - local_branch: mongodb-6.0.x
             upstream_branch: stable/6.0.x
+            ci_rerun: '{"kind":"ref","ref":"6.0.x"}'
           - local_branch: mongodb-5.2.x
             upstream_branch: stable/5.2.x   # LTS
+            ci_rerun: '{"kind":"ref","ref":"5.2.x"}'
 
     steps:
       - name: Configure git
@@ -121,7 +130,22 @@ jobs:
               "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}"
             printf '%s new upstream commit(s):\n\n%s\n' "$COUNT" "$COMMITS"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::warning::Fork branch force-pushed; re-trigger $BACKEND_REPO CI manually (see INTPYTHON-1025)."
+
+      # The backend checks this branch out by ref, so a force-push silently
+      # changes what it builds against. Nothing else would re-test it.
+      - name: Re-trigger ${{ env.BACKEND_REPO }} CI
+        if: steps.rebase.outputs.status == 'updated' && matrix.ci_rerun != ''
+        # TODO(INTPYTHON-1025): repoint to the merged commit and its release tag.
+        uses: mongodb-labs/drivers-github-tools/retrigger-ci@b9b7f8d10516d5a3f81ac2630c16568f11141369  # INTPYTHON-1025 branch
+        with:
+          repo: ${{ env.BACKEND_REPO }}
+          ci_rerun: ${{ matrix.ci_rerun }}
+          app_id: ${{ vars.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Warn when no backend branch consumes this fork branch
+        if: steps.rebase.outputs.status == 'updated' && matrix.ci_rerun == ''
+        run: echo "::warning::${{ matrix.local_branch }} force-pushed with no ci_rerun configured; no $BACKEND_REPO CI was re-triggered."
 
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
