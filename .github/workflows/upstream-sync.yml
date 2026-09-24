@@ -40,23 +40,26 @@ jobs:
         # feature releases plus any LTS (docs/internals/release-process.txt);
         # mongodb-5.0.x / mongodb-5.1.x are already gone upstream.
         #
-        # ci_rerun says how to re-test the backend branch that checks this
-        # fork branch out, since a force-push alone tells it nothing. Find the
-        # consumer by grepping the backend's test-python* workflows for the
-        # fork ref. Leave ci_rerun empty when nothing consumes the branch.
+        # ci_rerun says how to re-test whatever consumes this fork branch,
+        # since a force-push alone tells it nothing. Kept identical to the
+        # ci_rerun mapping in dbx's config.toml, so the two cannot drift: a
+        # string is a backend branch to dispatch on, a number is a backend PR
+        # whose runs re-queue, and {pr, evergreen} also retries its Evergreen
+        # patch. Leave empty when nothing consumes the branch.
         include:
+          # PR 602 supersedes 535 for the same head branch (django62).
           - local_branch: mongodb-6.2.x
             upstream_branch: main   # until Django cuts stable/6.2.x
-            ci_rerun: ''            # no backend branch uses it yet
+            ci_rerun: '{"mongodb/django-mongodb-backend": {"pr": 602, "evergreen": true}}'
           - local_branch: mongodb-6.1.x
             upstream_branch: stable/6.1.x
-            ci_rerun: '{"kind":"ref","ref":"main"}'
+            ci_rerun: '{"mongodb/django-mongodb-backend": "main"}'
           - local_branch: mongodb-6.0.x
             upstream_branch: stable/6.0.x
-            ci_rerun: '{"kind":"ref","ref":"6.0.x"}'
+            ci_rerun: '{"mongodb/django-mongodb-backend": "6.0.x"}'
           - local_branch: mongodb-5.2.x
             upstream_branch: stable/5.2.x   # LTS
-            ci_rerun: '{"kind":"ref","ref":"5.2.x"}'
+            ci_rerun: '{"mongodb/django-mongodb-backend": {"pr": 607, "evergreen": true}}'
 
     steps:
       - name: Configure git
@@ -131,8 +134,8 @@ jobs:
             printf '%s new upstream commit(s):\n\n%s\n' "$COUNT" "$COMMITS"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # The backend checks this branch out by ref, so a force-push changes
-      # what it builds against. Nothing else would re-test it.
+      # The backend pins this branch at a ref, so a force-push changes what it
+      # builds against. Nothing else would re-test it.
       - name: Re-trigger ${{ env.BACKEND_REPO }} CI
         if: steps.rebase.outputs.status == 'updated' && matrix.ci_rerun != ''
         # TODO(INTPYTHON-1025): the action is unreleased. Replace this with the
@@ -140,14 +143,11 @@ jobs:
         # zizmor fails the run instead of pinning something that resolves.
         uses: mongodb-labs/drivers-github-tools/retrigger-ci@REPLACE_WITH_RELEASED_SHA
         with:
-          repo: ${{ env.BACKEND_REPO }}
           ci_rerun: ${{ matrix.ci_rerun }}
+          owner: mongodb
+          repositories: django-mongodb-backend
           app_id: ${{ vars.APP_ID }}
           private_key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - name: Warn when no backend branch consumes this fork branch
-        if: steps.rebase.outputs.status == 'updated' && matrix.ci_rerun == ''
-        run: echo "::warning::${{ matrix.local_branch }} force-pushed with no ci_rerun configured; no $BACKEND_REPO CI was re-triggered."
 
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
