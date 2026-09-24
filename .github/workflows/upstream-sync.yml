@@ -42,7 +42,7 @@ jobs:
         #
         # ci_rerun says how to re-test whatever consumes this fork branch,
         # since a force-push alone tells it nothing. Kept identical to the
-        # ci_rerun mapping in dbx's config.toml, so the two cannot drift: a
+        # mapping the local sync tooling uses, so the two cannot drift: a
         # string is a backend branch to dispatch on, a number is a backend PR
         # whose runs re-queue, and {pr, evergreen} also retries its Evergreen
         # patch. Leave empty when nothing consumes the branch.
