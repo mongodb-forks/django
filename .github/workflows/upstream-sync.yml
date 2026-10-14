@@ -139,10 +139,7 @@ jobs:
       # builds against. Nothing else would re-test it.
       - name: Re-trigger ${{ env.BACKEND_REPO }} CI
         if: steps.rebase.outputs.status == 'updated' && matrix.ci_rerun != ''
-        # TODO(INTPYTHON-1025): the action is unreleased. Replace this with the
-        # merged commit and its release tag. Deliberately not a real hash, so
-        # zizmor fails the run instead of pinning something that resolves.
-        uses: mongodb-labs/drivers-github-tools/retrigger-ci@REPLACE_WITH_RELEASED_SHA
+        uses: mongodb-labs/drivers-github-tools/retrigger-ci@a60e21f810ee878bfc99364b28bdbb946ab80c63  # v3.1.0
         with:
           ci_rerun: ${{ matrix.ci_rerun }}
           owner: mongodb
