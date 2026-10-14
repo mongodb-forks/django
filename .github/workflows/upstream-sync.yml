@@ -117,8 +117,31 @@ jobs:
       # --force-with-lease, not --force: a push that landed since checkout fails
       # the run instead of being silently discarded.
       - name: Force-push rebased ${{ matrix.local_branch }}
+        id: push
         if: steps.rebase.outputs.status == 'updated'
         run: git push --force-with-lease origin "HEAD:${{ matrix.local_branch }}"
+
+      # A rejected push needs the same manual queue as a conflict. GitHub
+      # refuses workflow-file updates from an App without the workflows
+      # permission, so an upstream commit that touches .github fails here
+      # (INTPYTHON-1140).
+      - name: Open push-rejected issue
+        if: steps.push.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Push rejected: ${{ matrix.local_branch }}"
+        run: |
+          set -euo pipefail
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Push-rejected issue #$EXISTING already open."
+          else
+            BODY=$(printf 'Automated sync could not force-push the rebased `%s` back to `origin/%s` — manual resolution required.\n\nCommon cause: the App token has no `workflows` permission, so an upstream commit that touches `.github` is rejected.\n\nRun log: %s' \
+              "${{ matrix.local_branch }}" "${{ matrix.local_branch }}" \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
 
       # Records what landed, so a branch that turns out to be broken can be
       # traced back to the commits that arrived.
