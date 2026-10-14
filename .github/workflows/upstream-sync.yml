@@ -124,9 +124,10 @@ jobs:
       # A rejected push needs the same manual queue as a conflict. GitHub
       # refuses workflow-file updates from an App without the workflows
       # permission, so an upstream commit that touches .github fails here
-      # (INTPYTHON-1140).
+      # (INTPYTHON-1140). always() because GitHub prepends success() to an if
+      # with no status function, which would skip this after the failed push.
       - name: Open push-rejected issue
-        if: steps.push.outcome == 'failure'
+        if: always() && steps.push.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           TITLE: "Push rejected: ${{ matrix.local_branch }}"
