@@ -133,7 +133,10 @@ jobs:
           TITLE: "Push rejected: ${{ matrix.local_branch }}"
         run: |
           set -euo pipefail
-          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+          # -R because gh infers the repo from the remotes and picks upstream
+          # (django/django), which has issues disabled.
+          EXISTING=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --json number,title \
             --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Push-rejected issue #$EXISTING already open."
@@ -141,7 +144,8 @@ jobs:
             BODY=$(printf 'Automated sync could not force-push the rebased `%s` back to `origin/%s` — manual resolution required.\n\nCommon cause: the App token has no `workflows` permission, so an upstream commit that touches `.github` is rejected.\n\nRun log: %s' \
               "${{ matrix.local_branch }}" "${{ matrix.local_branch }}" \
               "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
-            gh issue create --title "$TITLE" --body "$BODY"
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$TITLE" \
+              --body "$BODY"
           fi
 
       # Records what landed, so a branch that turns out to be broken can be
@@ -178,7 +182,10 @@ jobs:
           TITLE: "Rebase conflict: ${{ matrix.local_branch }} onto upstream/${{ matrix.upstream_branch }}"
         run: |
           set -euo pipefail
-          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+          # -R because gh infers the repo from the remotes and picks upstream
+          # (django/django), which has issues disabled.
+          EXISTING=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --json number,title \
             --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
           if [ -n "$EXISTING" ]; then
             echo "Conflict issue #$EXISTING already open."
@@ -186,5 +193,6 @@ jobs:
             BODY=$(printf 'Automated sync could not rebase `%s` onto `upstream/%s` — manual resolution required.\n\nRun log: %s' \
               "${{ matrix.local_branch }}" "${{ matrix.upstream_branch }}" \
               "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
-            gh issue create --title "$TITLE" --body "$BODY"
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$TITLE" \
+              --body "$BODY"
           fi
