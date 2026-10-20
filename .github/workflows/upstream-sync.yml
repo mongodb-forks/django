@@ -8,6 +8,14 @@ on:
   schedule:
     - cron: '0 9 * * *'   # Daily 09:00 UTC
   workflow_dispatch:
+    inputs:
+      # For a manual run on already-up-to-date branches, e.g. after a rebase
+      # was resolved and force-pushed by hand. Scheduled runs get no inputs,
+      # so this is false for them.
+      force_ci_retrigger:
+        description: Re-trigger backend CI even when no rebase was needed
+        type: boolean
+        default: false
 
 env:
   UPSTREAM_URL: https://github.com/django/django.git
@@ -166,7 +174,9 @@ jobs:
       # The backend pins this branch at a ref, so a force-push changes what it
       # builds against. Nothing else would re-test it.
       - name: Re-trigger ${{ env.BACKEND_REPO }} CI
-        if: steps.rebase.outputs.status == 'updated' && matrix.ci_rerun != ''
+        if: >-
+          (steps.rebase.outputs.status == 'updated' || inputs.force_ci_retrigger)
+          && matrix.ci_rerun != ''
         uses: mongodb-labs/drivers-github-tools/retrigger-ci@a60e21f810ee878bfc99364b28bdbb946ab80c63  # v3.1.0
         with:
           ci_rerun: ${{ matrix.ci_rerun }}
