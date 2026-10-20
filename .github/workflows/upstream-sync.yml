@@ -182,8 +182,12 @@ jobs:
           ci_rerun: ${{ matrix.ci_rerun }}
           owner: mongodb
           repositories: django-mongodb-backend
-          app_id: ${{ vars.APP_ID }}
-          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          # CI_TRIGGER_APP_ID/CI_TRIGGER_APP_PRIVATE_KEY are the
+          # mongodb-ci-trigger-bot App, which is installed on the backend
+          # repo. The secure-checkout App (APP_ID) has no installation
+          # there, so its token mint fails.
+          app_id: ${{ vars.CI_TRIGGER_APP_ID }}
+          private_key: ${{ secrets.CI_TRIGGER_APP_PRIVATE_KEY }}
 
       - name: Open conflict issue
         if: steps.rebase.outputs.status == 'conflict'
