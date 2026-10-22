@@ -2,7 +2,8 @@ name: Sync with upstream Django
 
 # Keeps each mongodb-X.Y.x fork branch in sync with upstream Django by rebasing
 # and force-pushing (a rebased branch can't be advanced via a PR). A rebase that
-# conflicts is aborted and reported as an issue for manual resolution.
+# conflicts is aborted, reported as an issue for manual resolution, and fails the
+# job so the run shows red.
 
 on:
   schedule:
@@ -210,3 +211,9 @@ jobs:
             gh issue create -R "$GITHUB_REPOSITORY" --title "$TITLE" \
               --body "$BODY"
           fi
+          # A conflict needs a human, so the job must show red in the Actions
+          # tab, not just as an issue. The rebase step exits 0 so it can report
+          # status=conflict and let this step file the issue first; the failure
+          # is raised here, after the issue exists.
+          echo "::error::Rebase conflict: ${TITLE} — manual resolution required"
+          exit 1
